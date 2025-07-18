@@ -1,0 +1,67 @@
+# Comprehensive configuration for embedding evaluation
+# Allowed values/types for each parameter are shown in comments
+
+# 1. Data Source Configuration
+data_source:
+  type: csv                                  # str: 'csv', 'oracle', 'json', 'txt'
+  file: 'split_10MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
+  embed_columns: all                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
+  # Examples:
+  # embed_columns: all                      # embed entire file
+  # embed_columns: ["column1", "column2"]  # embed only these columns
+  # For Oracle:
+  # host: localhost
+  # port: 1521
+  # sid: XE
+  # user: myuser
+  # password: mypass
+  # table: mytable
+
+# 2. Embedding Parameters
+embed_config:
+  model: all-MiniLM-L6-v2         # str: see get_embedding_models() in app.py
+  batch_size: 100                  # int: 1-1024
+  parallelism: 4                  # int: 1-32
+  dimension: 384                  # int: 1-4096 should match the model's output dimension
+  indexing_type: flat             # str: 'flat', 'ivf', 'hnsw'
+  normalize: true                 # bool
+  embedding_type: semantic        # str: 'semantic', 'dense', 'sparse', 'hybrid'
+  search_type: semantic           # str: 'semantic', 'dense', 'sparse', 'hybrid'
+  # For OpenAI/Cohere models, add api_key fields as needed
+  # openai_api_key: sk-...
+  # cohere_api_key: ...
+
+# 3. Chunking Parameters
+chunking:
+  strategy: none              # str: 'none', 'sentence', 'sliding_window', 'fixed_length'
+  chunk_size: 128                 # int: 1-2048
+  overlap: 0                      # int: 0-128 (for sliding window)
+  delimiter: "\n"                 # str: delimiter for splitting (if needed)
+
+# 4. Vector Database Connection Details
+vector_db:
+  type: qdrant                    # str: 'Milvus', 'Qdrant'
+  host: localhost                 # str
+  port: 6333                      # int (Milvus default) or 6333 (Qdrant default)
+  collection: demo_collection     # str
+  username: ""                    # str (if needed)
+  password: ""                    # str (if needed)
+  batch_size: 500                 # int: batch size for DB insertion (default: 500)
+  upsert_retries: 3               # int: number of retries for Qdrant upsert (default: 3)
+  upsert_retry_delay: 2           # int: delay (seconds) between retries (default: 2)
+
+# 5. Retrieval & Evaluation Parameters
+retrieval:
+  enabled: true                   # bool
+  top_k: 5                        # int
+  metric_type: L2                 # str: 'L2', 'IP', 'COSINE', 'EUCLID', 'DOT'
+  nprobe: 10                      # int (Milvus)
+  distance: COSINE                # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
+  filter: ""                      # str: filter expression (if supported)
+  semantic_query: "what are flight delay reasons in 2022" # str: query for semantic search
+
+evaluation:
+  relevant_ids: [0,1,2,3,4]       # list[int]: ground truth relevant ids
+  metrics: [accuracy, recall, precision, f1] # list[str]: metrics to compute
+
+# Example values for each parameter are shown above. See app.py for allowed values.

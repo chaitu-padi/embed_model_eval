@@ -1,0 +1,24 @@
+{
+  "data_source": {
+    "type": "oracle",
+    "host": "localhost",
+    "port": "1521",
+    "sid": "FREEPDB1",
+    "user": "system",
+    "password": "opass1231",
+    "table": "fin_ana_data"
+  },
+  "embed_config": {
+    "model": "all-MiniLM-L6-v2",
+    "chunking": "sentence",
+    "parallel": true,
+    "embedding_type": "dense",
+    "search_type": "semantic"
+  },
+  "milvus_config": {
+    "db_type": "Milvus",
+    "host": "localhost",
+    "port": "19530",
+    "collection": "embeddings"
+  }
+}
