@@ -1,4 +1,6 @@
 def evaluate(retrieved_ids, relevant_ids, top_k):
+    print("[Evaluation][Debug] Retrieved IDs:", retrieved_ids)
+    print("[Evaluation][Debug] Relevant IDs:", relevant_ids)
     relevant_ids = set(relevant_ids)
     true_positives = len(set(retrieved_ids) & relevant_ids)
     accuracy = true_positives / top_k if top_k else 0

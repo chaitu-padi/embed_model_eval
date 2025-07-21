@@ -17,3 +17,17 @@ def retrieve_qdrant(client, collection, embeddings, top_k, semantic_query=None, 
         search_res = client.search(collection_name=collection, query_vector=embeddings[0].tolist(), limit=top_k, with_payload=True)
     retrieved_ids = [hit.id for hit in search_res]
     return retrieved_ids
+
+def retrieve_qdrant_with_results(client, collection, semantic_query, embed_model, top_k):
+    """
+    Retrieve from Qdrant using semantic query, returning both IDs and payloads.
+    """
+    query_emb = embed_model.encode([semantic_query], show_progress_bar=False)[0]
+    search_res = client.search(
+        collection_name=collection,
+        query_vector=query_emb.tolist(),
+        limit=top_k,
+        with_payload=True
+    )
+    results = [(hit.id, hit.payload.get('text', '')) for hit in search_res]
+    return results

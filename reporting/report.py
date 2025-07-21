@@ -40,7 +40,7 @@ def print_report(model_name, ds, db_type, host, port, collection, embedding_time
     <div class="section">
       <h3>Embedding Generation</h3>
       <table>
-        <tr><th>Time Taken</th><td>{metrics.get('embedding_time', 'N/A')} seconds</td></tr>
+        <tr><th>Time Taken</th><td>{metrics.get('embedding_time', embedding_time)} seconds</td></tr>
         <tr><th>Total Embeddings</th><td>{metrics.get('total_embeddings', 'N/A')}</td></tr>
         <tr><th>Resources Used</th><td>{device_name}</td></tr>
       </table>
@@ -48,7 +48,7 @@ def print_report(model_name, ds, db_type, host, port, collection, embedding_time
     <div class="section">
       <h3>Vector DB Insertion</h3>
       <table>
-        <tr><th>Insertion Time</th><td>{metrics.get('insertion_time', 'N/A')} seconds</td></tr>
+        <tr><th>Insertion Time</th><td>{metrics.get('insertion_time', embedding_time)} seconds</td></tr>
         <tr><th>Batch Size</th><td>{metrics.get('batch_size', 'N/A')}</td></tr>
         <tr><th>Retries</th><td>{metrics.get('upsert_retries', 'N/A')}</td></tr>
       </table>
@@ -56,8 +56,8 @@ def print_report(model_name, ds, db_type, host, port, collection, embedding_time
     <div class="section">
       <h3>Retrieval & Evaluation</h3>
       <table>
-        <tr><th>Retrieval Time</th><td>{metrics.get('retrieval_time', 'N/A')} seconds</td></tr>
-        <tr><th>Top-K</th><td>{metrics.get('top_k', 'N/A')}</td></tr>
+        <tr><th>Retrieval Time</th><td>{metrics.get('retrieval_time', retrieval_time)} seconds</td></tr>
+        <tr><th>Top-K</th><td>{metrics.get('top_k', top_k)}</td></tr>
         <tr><th>Accuracy</th><td>{metrics['accuracy']:.3f}</td></tr>
         <tr><th>Recall</th><td>{metrics['recall']:.3f}</td></tr>
         <tr><th>Precision</th><td>{metrics['precision']:.3f}</td></tr>
@@ -89,7 +89,7 @@ def print_report(model_name, ds, db_type, host, port, collection, embedding_time
     print(f"PyTorch Device: {device} ({device_name})")
     print(f"Embedding Time: {metrics.get('embedding_time', embedding_time):.2f} seconds")
     print(f"Total Embeddings: {metrics.get('total_embeddings', 'N/A')}")
-    print(f"Insertion Time: {metrics.get('insertion_time', 'N/A')} seconds")
+    print(f"Insertion Time: {metrics.get('insertion_time', embedding_time)} seconds")
     print(f"Batch Size: {metrics.get('batch_size', 'N/A')}")
     print(f"Retries: {metrics.get('upsert_retries', 'N/A')}")
     print(f"Retrieval Time: {metrics.get('retrieval_time', retrieval_time):.2f} seconds")

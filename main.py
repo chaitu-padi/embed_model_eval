@@ -8,6 +8,7 @@ from vector_databases.insertion import insert_embeddings_milvus, insert_embeddin
 from retrieval.retriever import retrieve_milvus, retrieve_qdrant
 from evaluation.metrics import evaluate
 from reporting.report import print_report
+from retrieval.retriever import retrieve_qdrant_with_results
 
 def main():
     parser = argparse.ArgumentParser(description="Embedding Model Evaluation CLI")
@@ -117,6 +118,7 @@ def main():
 
     # 4. Vector DB Ingestion
     logging.info("\n[Step 4] Vector Database Ingestion...")
+    start_embed = time.time()
     vdb_cfg = config['vector_db']
     db_type = vdb_cfg.get('type', 'Milvus').lower()
     host = vdb_cfg.get('host', 'localhost')
@@ -141,6 +143,36 @@ def main():
     else:
         logging.error(f"[DB][Error] Unsupported vector DB type: {db_type}")
         raise ValueError(f"Unsupported vector DB type: {db_type}")
+    end_embed = time.time()
+    embedding_insertion_time = end_embed - start_embed
+    logging.info(f"[Embedding Insertion] Completed. Time taken: {embedding_insertion_time:.2f} seconds. Total embeddings: {len(embeddings)}")
+
+    # --- Qdrant Indexing Setup ---
+    if db_type == 'qdrant':
+        vector_index_cfg = vdb_cfg.get('vector_index', {})
+        payload_index_cfg = vdb_cfg.get('payload_index', [])
+        from qdrant_client import QdrantClient
+        client = QdrantClient(host=host, port=port)
+        # Vector index setup
+        if vector_index_cfg:
+            index_type = vector_index_cfg.get('type', 'hnsw')
+            index_params = vector_index_cfg.get('params', {})
+            client.update_collection(
+                collection_name=collection,
+                optimizer_config={
+                    "default_segment_number": 1,
+                    "index_type": index_type,
+                    **index_params
+                }
+            )
+            logging.info(f"[Qdrant] Vector index configured: {index_type} with params {index_params}")
+        # Payload index setup
+        for field_cfg in payload_index_cfg:
+            field = field_cfg.get('field')
+            idx_type = field_cfg.get('type')
+            if field and idx_type:
+                client.create_payload_index(collection_name=collection, field_name=field, field_type=idx_type)
+                logging.info(f"[Qdrant] Payload index created for field '{field}' of type '{idx_type}'")
 
     # 5. Retrieval & Evaluation
     ret_cfg = config.get('retrieval', {})
@@ -159,9 +191,15 @@ def main():
         logging.info(f"[Retrieval] Retrieved IDs from Milvus: {retrieved_ids}")
     elif db_type == 'qdrant':
         semantic_query = ret_cfg.get('semantic_query', None)
-        if semantic_query:
-            retrieved_ids = retrieve_qdrant(client, collection, embeddings, top_k, semantic_query=semantic_query, embed_model=model)
-            logging.info(f"[Retrieval] Retrieved IDs from Qdrant (semantic query '{semantic_query}'): {retrieved_ids}")
+        if semantic_query:   
+            retrieved_ids=[]      
+            print(f"\nSemantic Query: {ret_cfg['semantic_query']}")
+            results = retrieve_qdrant_with_results(client, collection, ret_cfg['semantic_query'], model, top_k)
+            print("\nRetrieved Results:")
+            for rid, text in results:
+                retrieved_ids.append(rid)
+                print(f"ID: {rid}, Text: {text}")
+            logging.info(f"[Retrieval] Retrieved IDs from Qdrant: {retrieved_ids}")
         else:
             retrieved_ids = retrieve_qdrant(client, collection, embeddings, top_k)
             logging.info(f"[Retrieval] Retrieved IDs from Qdrant: {retrieved_ids}")
@@ -172,7 +210,21 @@ def main():
     retrieval_time = end_retrieve - start_retrieve
 
     logging.info(f"[Evaluation] Evaluating retrieval results...")
+
+
+
+    # 6. Report generation: Populate metrics with all required values for reporting
     metrics = evaluate(retrieved_ids, eval_cfg.get('relevant_ids', list(range(top_k))), top_k)
+    metrics['embedding_time'] = embedding_time
+    metrics['retrieval_time'] = retrieval_time
+    metrics['total_embeddings'] = len(embeddings)
+    metrics['batch_size'] = vdb_cfg.get('batch_size', 'N/A')
+    metrics['upsert_retries'] = vdb_cfg.get('upsert_retries', 'N/A')
+    metrics['insertion_time'] = embedding_insertion_time  
+    metrics['dimension'] = emb_cfg.get('dimension', 'N/A')
+    metrics['parallelism'] = emb_cfg.get('parallelism', 'N/A')
+    metrics['top_k'] = top_k
+
     print_report(
         emb_cfg.get('model', 'all-MiniLM-L6-v2'),
         ds,
