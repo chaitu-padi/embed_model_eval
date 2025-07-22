@@ -9,6 +9,7 @@ from retrieval.retriever import retrieve_milvus, retrieve_qdrant
 from evaluation.metrics import evaluate
 from reporting.report import print_report
 from retrieval.retriever import retrieve_qdrant_with_results
+from sentence_transformers import SentenceTransformer
 
 def main():
     parser = argparse.ArgumentParser(description="Embedding Model Evaluation CLI")
@@ -27,32 +28,37 @@ def main():
     logging.info("[Config] Loaded configuration parameters:")
     logging.info("\n" + pprint.pformat(config, indent=2))
 
-    # 1. Data Source
+    # 1. Data Source Loading
+    # ----------------------
     logging.info("\n[Step 1] Data Source Loading...")
     ds = config['data_source']
-    # Update data source path for new data folder
-    if config['data_source']['type'] == 'csv':
-        # If the file path in YAML is not absolute, resolve it relative to the data/output folder
-        file_path = config['data_source']['file']
+    # Resolve relative file path for CSV data sources
+    if ds['type'] == 'csv':
+        file_path = ds['file']
         if not os.path.isabs(file_path):
-            # Assume files are inside data/output/
             config['data_source']['file'] = os.path.join(
-            os.path.dirname(__file__), 'data', 'output', os.path.basename(file_path)
+                os.path.dirname(__file__), 'data', 'output', os.path.basename(file_path)
             )
     logging.info(f"[Data] Data source type: {ds['type']}")
     logging.info(f"[Data] Data source file/table: {ds.get('file', ds.get('table', ''))}")
+    # Load data and prepare texts for embedding
     df, collection_name, prepared_texts = load_data(config)
 
     # 2. Chunking
+    # -----------
     chunk_cfg = config.get('chunking', {})
     def chunk_texts(texts, strategy, chunk_size, overlap, delimiter):
+        """
+        Splits texts into chunks based on the selected strategy.
+        Supports: none, sentence, sliding_window, fixed_length.
+        """
         logging.info(f"[Chunking] Strategy: {strategy}, Chunk Size: {chunk_size}, Overlap: {overlap}, Delimiter: {delimiter}")
         if strategy == 'none':
             logging.info(f"[Chunking] No chunking applied. Returning original texts.")
             return texts
         elif strategy == 'sentence':
             import nltk
-            # Try to find both 'punkt' and 'punkt_tab', download if missing
+            # Ensure NLTK sentence tokenizer is available
             for resource in ['punkt', 'punkt_tab']:
                 try:
                     nltk.data.find(f'tokenizers/{resource}')
@@ -84,6 +90,7 @@ def main():
             logging.error(f"[Chunking][Error] Unsupported chunking strategy: {strategy}")
             raise ValueError(f"Unsupported chunking strategy: {strategy}")
 
+    # Prepare texts for embedding
     logging.info(f"[Data] Loaded {len(df)} rows from data source.")
     if prepared_texts is not None:
         texts = prepared_texts
@@ -91,6 +98,7 @@ def main():
     else:
         texts = df.iloc[:,0].astype(str).tolist()
         logging.info(f"[Data] Extracted {len(texts)} texts for embedding (default first column).")
+    # Apply chunking strategy
     logging.info("\n[Step 2] Chunking Texts...")
     texts = chunk_texts(
         texts,
@@ -100,14 +108,15 @@ def main():
         chunk_cfg.get('delimiter', '\n')
     )
 
-    # 3. Embedding
+
+    # 3. Embedding Generation
     logging.info("\n[Step 3] Embedding Generation...")
     emb_cfg = config['embed_config']
     logging.info(f"[Embedding] Model: {emb_cfg.get('model', 'all-MiniLM-L6-v2')}")
     logging.info(f"[Embedding] Batch Size: {emb_cfg.get('batch_size', 64)} | Parallelism: {emb_cfg.get('parallelism', 1)} | Dimension: {emb_cfg.get('dimension', 768)} | Normalize: {emb_cfg.get('normalize', True)}")
     start_embed = time.time()
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
+    
+    model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'), backend='onnx')
     batch_size = int(emb_cfg.get('batch_size', 64))
     normalize = emb_cfg.get('normalize', True)
     batches = [texts[i:i+batch_size] for i in range(0, len(texts), batch_size)]
@@ -150,6 +159,7 @@ def main():
     end_embed = time.time()
     embedding_insertion_time = end_embed - start_embed
     logging.info(f"[Embedding Insertion] Completed. Time taken: {embedding_insertion_time:.2f} seconds. Total embeddings: {len(embeddings)}")
+
 
     # --- Qdrant Indexing Setup ---
     if db_type == 'qdrant':
@@ -198,14 +208,15 @@ def main():
         logging.info(f"[Retrieval] Retrieved IDs from Milvus: {retrieved_ids}")
     elif db_type == 'qdrant':
         semantic_query = ret_cfg.get('semantic_query', None)
-        if semantic_query:   
-            retrieved_ids=[]      
-            print(f"\nSemantic Query: {ret_cfg['semantic_query']}")
-            results = retrieve_qdrant_with_results(client, collection, ret_cfg['semantic_query'], model, top_k)
+        payload_filter_cfg = ret_cfg.get('payload_filter', None)
+        if semantic_query:
+            retrieved_ids = []
+            print(f"\nSemantic Query: {semantic_query}")
+            results = retrieve_qdrant_with_results(client, collection, semantic_query, model, top_k, payload_filter_cfg)
             print("\nRetrieved Results:")
-            for rid, text in results:
+            for rid, payload in results:
                 retrieved_ids.append(rid)
-                print(f"ID: {rid}, Text: {text}")
+                print(f"ID: {rid}, Payload: {payload}")
             logging.info(f"[Retrieval] Retrieved IDs from Qdrant: {retrieved_ids}")
         else:
             retrieved_ids = retrieve_qdrant(client, collection, embeddings, top_k)
@@ -247,4 +258,42 @@ def main():
     logging.info("\n[Process] Embedding Model Evaluation Pipeline Complete.")
 
 if __name__ == "__main__":
-    main()
+    
+    parser = argparse.ArgumentParser(description="Embedding Model Evaluation CLI")
+    parser.add_argument('--config', type=str, default='../config/config.yaml', help='Path to configuration YAML file')
+    args = parser.parse_args()
+
+    import logging
+    from tqdm import tqdm
+    import pprint
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    logging.info("\n[Process] Starting Embedding Model Evaluation Pipeline...")
+    from common_utils.config_utils import get_config_path, load_yaml_config
+    config_path = args.config if os.path.isabs(args.config) else get_config_path(os.path.basename(args.config))
+    logging.info(f"[Config] Loading configuration from: {config_path}")
+    config = load_yaml_config(config_path)
+    ret_cfg = config.get('retrieval', {})
+    vdb_cfg = config['vector_db']
+    semantic_query = ret_cfg.get('semantic_query', None)
+    payload_filter_cfg = ret_cfg.get('payload_filter', None)
+    emb_cfg = config['embed_config']
+    vector_index_cfg = vdb_cfg.get('vector_index', {})
+    payload_index_cfg = vdb_cfg.get('payload_index', [])
+    from qdrant_client import QdrantClient
+    client = QdrantClient(host="localhost", port=6333)
+
+    model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'), backend='onnx')
+    batch_size = int(emb_cfg.get('batch_size', 64))
+    normalize = emb_cfg.get('normalize', True)
+    if semantic_query:
+        retrieved_ids = []
+        print(f"\nSemantic Query: {semantic_query}")
+        print(f"\npayload_filter_cfg: {payload_filter_cfg}")
+        results = retrieve_qdrant_with_results(client, "demo_collection", semantic_query, model, 5, payload_filter_cfg)
+        print("\nRetrieved Results:")
+        for rid, payload in results:
+            retrieved_ids.append(rid)
+            print(f"ID: {rid}, Payload: {payload}")
+        logging.info(f"[Retrieval] Retrieved IDs from Qdrant: {retrieved_ids}")
+    
+    #main()

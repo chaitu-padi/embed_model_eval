@@ -5,8 +5,8 @@
 data_source:
   type: csv                                  # str: 'csv', 'oracle', 'json', 'txt'
   file: 'split_10MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
-  embed_columns: ["FlightDate","Airline	Origin", "Dest", "Cancelled", "Diverted", "OriginStateName", "DestStateName", "ArrTimeBlk"]                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
-  # Examples:
+  embed_columns: ["FlightDate", "Airline", "Origin", "Dest", "Cancelled", "Diverted", "DepDelayMinutes", "OriginStateName", "DestStateName", "ArrTimeBlk"]                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
+
   # embed_columns: all                      # embed entire file
   # embed_columns: ["column1", "column2"]  # embed only these columns
   # For Oracle:
@@ -20,8 +20,8 @@ data_source:
 # 2. Embedding Parameters
 embed_config:
   model: all-MiniLM-L6-v2         # str: see get_embedding_models() in app.py
-  batch_size: 100                  # int: 1-1024
-  parallelism: 4                  # int: 1-32
+  batch_size: 300                  # int: 1-1024
+  parallelism: 8                  # int: 1-32
   dimension: 384                  # int: 1-4096 should match the model's output dimension
   indexing_type: flat             # str: 'flat', 'ivf', 'hnsw'
   normalize: true                 # bool
@@ -56,24 +56,34 @@ vector_db:
       m: 16                       # int: HNSW parameter (example)
       ef_construct: 128           # int: HNSW parameter (example)
   payload_index:
-    - field: Airline_Origin       # str: payload field name
-      type: keyword               # str: 'keyword', 'integer', 'float', etc.
-    - field: Cancelled            # str: payload field name
-      type: integer               # str: 'keyword', 'integer', 'float', etc.
-  # Add more fields as needed for your schema
+    - field: Origin
+      type: keyword
+    - field: FlightDate
+      type: datetime
+    - field: DepDelayMinutes
+      type: integer 
+              
+ 
 
 # 5. Retrieval & Evaluation Parameters
 retrieval:
   enabled: true                   # bool
   top_k: 5                        # int
-  metric_type: L2                 # str: 'L2', 'IP', 'COSINE', 'EUCLID', 'DOT'
+  metric_type: COSINE                 # str: 'L2', 'IP', 'COSINE', 'EUCLID', 'DOT'
   nprobe: 10                      # int (Milvus)
   distance: COSINE                # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
   filter: ""                      # str: filter expression (if supported)
-  semantic_query: "Find flights from JFK to LAX in January 2022 that were delayed" # str: query for semantic search
+  semantic_query: "Find flights,which origin from IND on date April 1st 2022 which are delayed" # str: query for semantic search
+  payload_filter:
+    Origin: IND
+    DepDelayMinutes:
+      gte: 1
+    FlightDate: 2022-04-01
+      #gte: "2022-04-01"
+      #lte: "2022-04-01"
 
 evaluation:
-  relevant_ids: [0,1,2,3,4]       # list[int]: ground truth relevant ids
-  metrics: [accuracy, recall, precision, f1] # list[str]: metrics to compute
+  relevant_ids: [3295,1489,3298,3291,1419]       # list[int]: ground truth relevant ids
+  metrics: [accuracy, recall, precision, f1]     # list[str]: metrics to compute
 
 # Example values for each parameter are shown above. See app.py for allowed values.
