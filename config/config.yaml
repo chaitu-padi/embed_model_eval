@@ -70,7 +70,7 @@ retrieval:
   nprobe: 10                      # int (Milvus)
   distance: COSINE                # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
   filter: ""                      # str: filter expression (if supported)
-  semantic_query: "what are the flight delay reasons in 2022 ?" # str: query for semantic search
+  semantic_query: "Find flights from JFK to LAX in January 2022 that were delayed" # str: query for semantic search
 
 evaluation:
   relevant_ids: [0,1,2,3,4]       # list[int]: ground truth relevant ids

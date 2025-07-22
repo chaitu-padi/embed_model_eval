@@ -41,7 +41,7 @@ def main():
             )
     logging.info(f"[Data] Data source type: {ds['type']}")
     logging.info(f"[Data] Data source file/table: {ds.get('file', ds.get('table', ''))}")
-    df, collection_name = load_data(config)
+    df, collection_name, prepared_texts = load_data(config)
 
     # 2. Chunking
     chunk_cfg = config.get('chunking', {})
@@ -85,8 +85,12 @@ def main():
             raise ValueError(f"Unsupported chunking strategy: {strategy}")
 
     logging.info(f"[Data] Loaded {len(df)} rows from data source.")
-    texts = df.iloc[:,0].astype(str).tolist()
-    logging.info(f"[Data] Extracted {len(texts)} texts for embedding.")
+    if prepared_texts is not None:
+        texts = prepared_texts
+        logging.info(f"[Data] Used best-practice concatenation for {len(texts)} rows and columns: {config['data_source'].get('embed_columns', 'all')}")
+    else:
+        texts = df.iloc[:,0].astype(str).tolist()
+        logging.info(f"[Data] Extracted {len(texts)} texts for embedding (default first column).")
     logging.info("\n[Step 2] Chunking Texts...")
     texts = chunk_texts(
         texts,
@@ -157,15 +161,18 @@ def main():
         if vector_index_cfg:
             index_type = vector_index_cfg.get('type', 'hnsw')
             index_params = vector_index_cfg.get('params', {})
+            optimizer_config = {"default_segment_number": 1}
+            hnsw_config = None
+            if index_type == 'hnsw':
+                # Only pass HNSW params to hnsw_config
+                hnsw_config = {k: v for k, v in index_params.items() if k in ['m', 'ef_construct']}
+            # Remove unsupported fields from optimizer_config
             client.update_collection(
                 collection_name=collection,
-                optimizer_config={
-                    "default_segment_number": 1,
-                    "index_type": index_type,
-                    **index_params
-                }
+                optimizer_config=optimizer_config,
+                hnsw_config=hnsw_config
             )
-            logging.info(f"[Qdrant] Vector index configured: {index_type} with params {index_params}")
+            logging.info(f"[Qdrant] Vector index configured: {index_type} with hnsw_config {hnsw_config}")
         # Payload index setup
         for field_cfg in payload_index_cfg:
             field = field_cfg.get('field')
