@@ -1,4 +1,4 @@
-# Embedding Model Evaluation
+# Embedding Model Evaluation [IN PROGRESS]
 
 A comprehensive framework for evaluating and comparing embedding models, featuring parallel processing, multiple chunking strategies, and vector database integration (Qdrant/Milvus). The framework supports side-by-side model comparison with detailed performance metrics and visualization.
 
@@ -271,7 +271,7 @@ See `config/config.yaml` for all options:
 - Evaluation metrics and ground truth
 
 ## Current Status
-The framework is production-ready with the following features:
+The framework is ready with the following features:
 - **Stable Backend CLI**: Full pipeline support for multi-model evaluation
 - **Comparative Reporting**: Side-by-side model evaluation with detailed metrics
 - **Latest Features**:
