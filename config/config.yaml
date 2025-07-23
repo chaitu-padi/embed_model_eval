@@ -1,10 +1,14 @@
 # Comprehensive configuration for embedding evaluation
 # Allowed values/types for each parameter are shown in comments
 
+#debug retreival
+debug_retrieval_only: false
+
+
 # 1. Data Source Configuration
 data_source:
   type: csv                                  # str: 'csv', 'oracle', 'json', 'txt'
-  file: 'split_10MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
+  file: 'data/output/split_2MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
   embed_columns: ["FlightDate", "Airline", "Origin", "Dest", "Cancelled", "Diverted", "DepDelayMinutes", "OriginStateName", "DestStateName", "ArrTimeBlk"]                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
 
   # embed_columns: all                      # embed entire file
@@ -19,10 +23,19 @@ data_source:
 
 # 2. Embedding Parameters
 embed_config:
-  model: all-MiniLM-L6-v2         # str: see get_embedding_models() in app.py
-  batch_size: 300                  # int: 1-1024
-  parallelism: 8                  # int: 1-32
-  dimension: 384                  # int: 1-4096 should match the model's output dimension
+  models: ["all-MiniLM-L6-v2", "all-mpnet-base-v2"]  # List of models to evaluate
+  default_model: "all-MiniLM-L6-v2"                  # Default model for single-model operations
+  batch_size: 256                 # Increased batch size
+  normalize: true
+  optimization:
+    use_gpu: true
+    half_precision: true
+    num_workers: 8                # Number of CPU workers for data loading
+  dimension: 384                  # Target dimension after PCA if needed
+  use_pca: true                  # Whether to use PCA for dimension reduction
+  pca_config:
+    random_state: 42
+    whiten: false                # Whether to scale the components to unit variance
   indexing_type: flat             # str: 'flat', 'ivf', 'hnsw'
   normalize: true                 # bool
   embedding_type: semantic        # str: 'semantic', 'dense', 'sparse', 'hybrid'
@@ -33,7 +46,7 @@ embed_config:
 
 # 3. Chunking Parameters
 chunking:
-  strategy: none              # str: 'none', 'sentence', 'sliding_window', 'fixed_length'
+  strategy: none                  # str: 'none', 'sentence', 'sliding_window', 'fixed_length'
   chunk_size: 128                 # int: 1-2048
   overlap: 0                      # int: 0-128 (for sliding window)
   delimiter: "\n"                 # str: delimiter for splitting (if needed)
@@ -43,10 +56,8 @@ vector_db:
   type: qdrant                    # str: 'Milvus', 'Qdrant'
   host: localhost                 # str
   port: 6333                      # int (Milvus default) or 6333 (Qdrant default)
-  collection: demo_collection     # str
-  username: ""                    # str (if needed)
-  password: ""                    # str (if needed)
-  batch_size: 500                 # int: batch size for DB insertion (default: 500)
+  collection: flight_embeddings     # str
+  batch_size: 300                 # int: batch size for DB insertion (default: 500)
   upsert_retries: 3               # int: number of retries for Qdrant upsert (default: 3)
   upsert_retry_delay: 2           # int: delay (seconds) between retries (default: 2)
   # Indexing configuration for Qdrant
@@ -54,14 +65,14 @@ vector_db:
     type: hnsw                    # str: 'plain', 'hnsw', 'ivf', etc.
     params:
       m: 16                       # int: HNSW parameter (example)
-      ef_construct: 128           # int: HNSW parameter (example)
+      ef_construct: 100           # int: HNSW parameter (example)
   payload_index:
     - field: Origin
       type: keyword
     - field: FlightDate
       type: datetime
     - field: DepDelayMinutes
-      type: integer 
+      type: float 
               
  
 
@@ -73,17 +84,25 @@ retrieval:
   nprobe: 10                      # int (Milvus)
   distance: COSINE                # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
   filter: ""                      # str: filter expression (if supported)
-  semantic_query: "Find flights,which origin from IND on date April 1st 2022 which are delayed" # str: query for semantic search
+  semantic_query: "Find flights,which origin from IND on date April 1st 2022 which are delayed for longer time" # str: query for semantic search
   payload_filter:
-    Origin: IND
+    Origin: "IND"
+    FlightDate: "2022-04-01"
     DepDelayMinutes:
-      gte: 1
-    FlightDate: 2022-04-01
+      gte: 37
+  order_by:
+    - field: DepDelayMinutes
+      order: desc
+  #payload_filter:
+    #origin: "IND"
+    #DepDelayMinutes:
+    #  gte: 1
+    #FlightDate: 2022-04-01
       #gte: "2022-04-01"
       #lte: "2022-04-01"
 
 evaluation:
-  relevant_ids: [3295,1489,3298,3291,1419]       # list[int]: ground truth relevant ids
+  relevant_ids: [3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
   metrics: [accuracy, recall, precision, f1]     # list[str]: metrics to compute
 
 # Example values for each parameter are shown above. See app.py for allowed values.

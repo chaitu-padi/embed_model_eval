@@ -1,4 +1,5 @@
 # Retrieval for Milvus and Qdrant
+from qdrant_client.http import models as qdrant_models
 
 def retrieve_milvus(col, embeddings, top_k, metric_type, nprobe):
     search_params = {"metric_type": metric_type, "params": {"nprobe": nprobe}}
@@ -23,7 +24,6 @@ def retrieve_qdrant_with_results(client, collection, semantic_query, embed_model
     Retrieve from Qdrant using semantic query, returning both IDs and payloads.
     """
     # Build Qdrant payload filter from config
-    from qdrant_client.http import models as qdrant_models
     query_emb = embed_model.encode([semantic_query], show_progress_bar=False)[0]
     must_conditions = []
     if payload_filter_cfg:
@@ -42,6 +42,8 @@ def retrieve_qdrant_with_results(client, collection, semantic_query, embed_model
                     match=qdrant_models.MatchValue(value=val)
                 ))
     payload_filter = qdrant_models.Filter(must=must_conditions) if must_conditions else None
+
+    # Sorting by payload fields is not supported in this Qdrant client version
     search_res = client.search(
         collection_name=collection,
         query_vector=query_emb.tolist(),

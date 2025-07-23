@@ -45,7 +45,7 @@ def split_csv_by_size(input_path, output_dir, sizes_mb):
     print(f"Created {file_idx} files in {output_dir}")
 
 if __name__ == "__main__":
-    sizes_mb = [10, 100, 500, 750, 1000]
+    sizes_mb = [2, 5] #,10, 500, 750, 1000]
     input_path="C:\\Users\\Lenovo\\PycharmProjects\\GenAILC\\embed_model_eval\\data\\Combined_Flights_2022.csv"
     output_path="C:\\Users\\Lenovo\\PycharmProjects\\GenAILC\\embed_model_eval\\data\\output"
     split_csv_by_size(input_path, output_path, sizes_mb)
