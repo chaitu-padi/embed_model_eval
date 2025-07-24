@@ -478,19 +478,19 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>Accuracy</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("accuracy", "N/A"):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("accuracy", 0.0):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Recall@{top_k}</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("recall", "N/A"):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("recall", 0.0):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Precision@{top_k}</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("precision", "N/A"):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("precision", 0.0):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>F1 Score</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("f1", "N/A"):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("f1", 0.0):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Mean Reciprocal Rank</td>

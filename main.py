@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import datetime
+import numpy as np
 from typing import Dict, Any
 
 from config.config_loader import ConfigLoader
@@ -52,7 +53,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         insertion_time = 0
     else:
         # 1. Load data
-        logging.info("\n[Step 1 start] Data Source Loading...")
+        logging.info("[Step 1 start] Data Source Loading...")
         import time
         t0 = time.time()
         df, collection_name, texts, payloads = load_data(config)
@@ -189,7 +190,18 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     eval_cfg = config.get('evaluation', {})
     logging.info(f"[Step 6] Evaluation: Retrieved IDs: {retrieved_ids}")
     logging.info(f"[Step 6] Evaluation: Relevant IDs: {eval_cfg.get('relevant_ids', [])}")
-    eval_metrics = evaluate(retrieved_ids, eval_cfg.get('relevant_ids', []), ret_cfg.get('top_k', 5))
+    
+    # Ensure we have relevant IDs for evaluation
+    relevant_ids = eval_cfg.get('relevant_ids', [])
+    top_k = ret_cfg.get('top_k', 5)
+    
+    if not relevant_ids:
+        logging.warning("[Step 6] No relevant IDs provided for evaluation. Metrics will be zero.")
+        
+    # Calculate evaluation metrics
+    eval_metrics = evaluate(retrieved_ids, relevant_ids, top_k)
+    logging.info(f"[Step 6] Evaluation Metrics: Precision={eval_metrics['precision']:.3f}, "
+                f"Recall={eval_metrics['recall']:.3f}, F1={eval_metrics['f1']:.3f}")
     
     # Calculate rates
     embeddings_per_second = (len(embeddings) / embedding_time if 'embeddings' in locals() 

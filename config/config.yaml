@@ -8,7 +8,7 @@ debug_retrieval_only: false
 # 1. Data Source Configuration
 data_source:
   type: csv                                  # str: 'csv', 'oracle', 'json', 'txt'
-  file: 'data/output/split_2MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
+  file: 'data/output/split_0_25MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
   embed_columns: ["FlightDate", "Airline", "Origin", "Dest", "Cancelled", "Diverted", "DepDelayMinutes", "OriginStateName", "DestStateName", "ArrTimeBlk"]                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
 
   # embed_columns: all                      # embed entire file
@@ -102,7 +102,7 @@ retrieval:
       #lte: "2022-04-01"
 
 evaluation:
-  relevant_ids: [3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
+  relevant_ids: [1488,1418] #[3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
   metrics: [accuracy, recall, precision, f1]     # list[str]: metrics to compute
 
 # Example values for each parameter are shown above. See app.py for allowed values.
