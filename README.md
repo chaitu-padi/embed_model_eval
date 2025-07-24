@@ -116,38 +116,38 @@ vector_db:
 
 ## Data Flow
 
-1. **Data Loading**:
-   ```mermaid
-   graph LR
-       Config --> DataSource[Data Source]
-       DataSource --> TextExtraction[Text Extraction]
-       TextExtraction --> Chunking[Optional Chunking]
-       Chunking --> ProcessedData[Processed Texts]
-   ```
+### 1. Data Loading
+```mermaid
+graph LR
+    Config --> DataSource[Data Source]
+    DataSource --> TextExtraction[Text Extraction]
+    TextExtraction --> Chunking[Optional Chunking]
+    Chunking --> ProcessedData[Processed Texts]
+```
 
-2. **Embedding Generation**:
-   ```mermaid
-   graph LR
-       Texts --> Model[SentenceTransformer]
-       Model --> RawEmbeddings[Raw Embeddings]
-       RawEmbeddings --> |If needed| PCA[PCA Reduction]
-       PCA --> FinalEmbeddings[Final Embeddings]
-   ```
+### 2. Embedding Generation
+```mermaid
+graph LR
+    Texts --> Model[SentenceTransformer]
+    Model --> RawEmbeddings[Raw Embeddings]
+    RawEmbeddings --> |If needed| PCA[PCA Reduction]
+    PCA --> FinalEmbeddings[Final Embeddings]
+```
 
-3. **Vector Database Flow**:
-   ```mermaid
-   graph LR
-       Embeddings --> VectorDB[Vector DB]
-       Metadata --> PayloadIndex[Payload Indexing]
-       PayloadIndex --> VectorDB
-       VectorDB --> Search[Vector Search]
-   ```
+### 3. Vector Database Flow
+```mermaid
+graph LR
+    Embeddings --> VectorDB[Vector DB]
+    Metadata --> PayloadIndex[Payload Indexing]
+    PayloadIndex --> VectorDB
+    VectorDB --> Search[Vector Search]
+```
 
 ## Usage
 
-1. **Setup Configuration**:
-   - Modify `config.yaml` with desired settings
-   - Configure model, database, and evaluation parameters
+### Setup Configuration
+- Modify `config.yaml` with desired settings
+- Configure model, database, and evaluation parameters
 
 2. **Run Pipeline**:
    ```bash
