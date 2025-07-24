@@ -4,22 +4,29 @@ A comprehensive framework for evaluating and comparing embedding models, featuri
 
 ## Architecture Overview
 
-The system follows a pipeline architecture with the following components:
+### System Components
 
-### Pipeline Flow
+The framework consists of three main component groups:
+
+1. **Pipeline Components**: Core processing stages
+2. **Data Flow Components**: Data transformation and storage
+3. **Results Components**: Search and reporting
+
+### Pipeline Diagram
+
 ```mermaid
 graph TD
-    subgraph Pipeline Components
+    subgraph "1. Pipeline Components"
         Config[Configuration YAML] --> Pipeline[Embedding Pipeline]
-        Pipeline --> DataLoad[1. Data Loading]
-        Pipeline --> EmbGen[2. Embedding Generation]
-        Pipeline --> VectorDB[3. Vector DB Insertion]
-        Pipeline --> Retrieval[4. Retrieval]
-        Pipeline --> Eval[5. Evaluation]
-        Pipeline --> Report[6. Report Generation]
+        Pipeline --> DataLoad[Data Loading]
+        Pipeline --> EmbGen[Embedding Generation]
+        Pipeline --> VectorDB[Vector DB Insertion]
+        Pipeline --> Retrieval[Retrieval]
+        Pipeline --> Eval[Evaluation]
+        Pipeline --> Report[Report Generation]
     end
 
-    subgraph Data Flow
+    subgraph "2. Data Flow Components"
         DataLoad --> |CSV/Oracle/JSON| Texts[Processed Texts]
         EmbGen --> |SentenceTransformer| Embeddings[Raw Embeddings]
         Embeddings --> |Optional PCA| DimReduction[Dimension Reduction]
@@ -27,11 +34,12 @@ graph TD
         VectorStorage --> |Qdrant/Milvus| VectorDB
     end
 
-    subgraph Results
+    subgraph "3. Results Components"
         Retrieval --> |Vector Similarity| SearchResults[Search Results]
         SearchResults --> |Performance Metrics| Report
     end
 
+    %% Styling
     classDef pipeline fill:#e1f5fe,stroke:#01579b;
     classDef dataflow fill:#f3e5f5,stroke:#4a148c;
     classDef results fill:#e8f5e9,stroke:#1b5e20;
@@ -40,6 +48,28 @@ graph TD
     class Texts,Embeddings,DimReduction,VectorStorage dataflow;
     class SearchResults results;
 ```
+
+### Component Details
+
+#### 1. Pipeline Components
+- **Configuration**: YAML-based system configuration
+- **Data Loading**: Source data import and preprocessing
+- **Embedding Generation**: Text to vector conversion
+- **Vector DB Insertion**: Database storage and indexing
+- **Retrieval**: Vector similarity search
+- **Evaluation**: Performance metric calculation
+- **Report Generation**: Results visualization
+
+#### 2. Data Flow Components
+- **Text Processing**: Source data transformation
+- **Embedding Creation**: Vector generation
+- **Dimension Reduction**: Optional PCA
+- **Vector Storage**: Database integration
+
+#### 3. Results Components
+- **Search Results**: Vector similarity findings
+- **Performance Metrics**: Quality measurements
+- **Report Generation**: Visualization and analysis
 
 ## Key Features
 
