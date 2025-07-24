@@ -4,23 +4,41 @@ A comprehensive framework for evaluating and comparing embedding models, featuri
 
 ## Architecture Overview
 
+The system follows a pipeline architecture with the following components:
+
+### Pipeline Flow
 ```mermaid
 graph TD
-    Config[Configuration YAML] --> Pipeline[Embedding Pipeline]
-    Pipeline --> DataLoad[1. Data Loading]
-    Pipeline --> EmbGen[2. Embedding Generation]
-    Pipeline --> VectorDB[3. Vector DB Insertion]
-    Pipeline --> Retrieval[4. Retrieval]
-    Pipeline --> Eval[5. Evaluation]
-    Pipeline --> Report[6. Report Generation]
+    subgraph Pipeline Components
+        Config[Configuration YAML] --> Pipeline[Embedding Pipeline]
+        Pipeline --> DataLoad[1. Data Loading]
+        Pipeline --> EmbGen[2. Embedding Generation]
+        Pipeline --> VectorDB[3. Vector DB Insertion]
+        Pipeline --> Retrieval[4. Retrieval]
+        Pipeline --> Eval[5. Evaluation]
+        Pipeline --> Report[6. Report Generation]
+    end
 
-    DataLoad --> |CSV/Oracle/JSON| Texts[Processed Texts]
-    EmbGen --> |SentenceTransformer| Embeddings
-    Embeddings --> |Optional PCA| DimReduction[Dimension Reduction]
-    DimReduction --> VectorStorage[Vector Storage]
-    VectorStorage --> |Qdrant/Milvus| VectorDB
-    Retrieval --> |Vector Similarity| Results
-    Results --> |Metrics| Report
+    subgraph Data Flow
+        DataLoad --> |CSV/Oracle/JSON| Texts[Processed Texts]
+        EmbGen --> |SentenceTransformer| Embeddings[Raw Embeddings]
+        Embeddings --> |Optional PCA| DimReduction[Dimension Reduction]
+        DimReduction --> VectorStorage[Vector Storage]
+        VectorStorage --> |Qdrant/Milvus| VectorDB
+    end
+
+    subgraph Results
+        Retrieval --> |Vector Similarity| SearchResults[Search Results]
+        SearchResults --> |Performance Metrics| Report
+    end
+
+    classDef pipeline fill:#e1f5fe,stroke:#01579b;
+    classDef dataflow fill:#f3e5f5,stroke:#4a148c;
+    classDef results fill:#e8f5e9,stroke:#1b5e20;
+    
+    class Pipeline,DataLoad,EmbGen,VectorDB,Retrieval,Eval,Report pipeline;
+    class Texts,Embeddings,DimReduction,VectorStorage dataflow;
+    class SearchResults results;
 ```
 
 ## Key Features
