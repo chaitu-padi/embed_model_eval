@@ -21,10 +21,21 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     """Execute the main embedding evaluation pipeline for a specific model"""
     debug_retrieval_only = config.get('debug_retrieval_only', False)
     vdb_cfg = config['vector_db']
+    emb_cfg = config['embed_config']
     
-    # Update the collection name to include model name to keep results separate
+    # Update the collection name to include model name and target dimension
     model_safe_name = model_name.replace('/', '_').replace('-', '_')
-    vdb_cfg['collection'] = f"{vdb_cfg.get('collection', 'embeddings')}_{model_safe_name}"
+    dimension = emb_cfg.get('dimension', 384)  # Get target dimension
+    vdb_cfg['collection'] = f"{vdb_cfg.get('collection', 'embeddings')}_{model_safe_name}_{dimension}d"
+    
+    # Validate PCA settings when using multiple models
+    if model_name in emb_cfg.get('models', []):
+        if not emb_cfg.get('use_pca', False):
+            logging.warning(
+                f"Multiple models configured but PCA is disabled. "
+                f"This may cause dimension mismatch errors if models output different dimensions. "
+                f"Enable PCA in config.yaml with use_pca: true"
+            )
     if debug_retrieval_only:
         logging.info("[DEBUG] Retrieval-only mode enabled. Skipping embedding generation and insertion.")
         from qdrant_client import QdrantClient
@@ -93,7 +104,6 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
             batch_size=int(vdb_cfg.get('batch_size', 100))
         )
         insertion_time = time.time() - t2
-        # Print this log after insertion
         logging.info(f"[Step 3 end] Inserted embeddings into vector DB. Time taken: {insertion_time:.2f} seconds.")
 
         # 4. Configure indexing (if Qdrant)
@@ -128,11 +138,40 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 embed_model = model
             else:
                 from sentence_transformers import SentenceTransformer
+                from embeddings.generator import generate_embeddings  # Import generator for PCA
                 emb_cfg = config['embed_config']
                 embed_model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
+                
+                # Configure embedding generation to match collection dimension
+                target_dim = emb_cfg.get('dimension', 384)
+                use_pca = emb_cfg.get('use_pca', False)
+                pca_config = emb_cfg.get('pca_config', {})
+                
             if semantic_query:
                 logging.info(f"[Step 5] Performing semantic search: {semantic_query}")
-                results = retrieve_qdrant_with_results(db_client, collection_name, semantic_query, embed_model, top_k, payload_filter_cfg)
+                # Generate query embedding with proper dimension
+                if not debug_retrieval_only:
+                    # For single query, use the original model dimension and normalize if needed
+                    query_embedding = embed_model.encode(
+                        [semantic_query],
+                        normalize_embeddings=emb_cfg.get('normalize', True),
+                        convert_to_numpy=True
+                    )[0]
+                    
+                    # If PCA was used for the collection vectors, we need to load the same PCA model
+                    if use_pca:
+                        from embeddings.generator import load_pca_model
+                        pca = load_pca_model(target_dim, pca_config)
+                        if pca is not None:
+                            query_embedding = pca.transform([query_embedding])[0]
+                            # Normalize after PCA if specified
+                            if emb_cfg.get('normalize', True):
+                                query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                    
+                    results = retrieve_qdrant_with_results(db_client, collection_name, semantic_query, embed_model, top_k, payload_filter_cfg, query_embedding)
+                else:
+                    results = retrieve_qdrant_with_results(db_client, collection_name, semantic_query, embed_model, top_k, payload_filter_cfg)
+                
                 for idx, (rid, payload) in enumerate(results):
                     payload_str = ', '.join([f"{i}:{k}={v}" for i, (k, v) in enumerate(payload.items())]) if payload else 'None'
                     logging.info(f"[Step 5][Result {idx}] ID: {rid}, Payload: {payload_str}")
@@ -150,39 +189,52 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     eval_cfg = config.get('evaluation', {})
     logging.info(f"[Step 6] Evaluation: Retrieved IDs: {retrieved_ids}")
     logging.info(f"[Step 6] Evaluation: Relevant IDs: {eval_cfg.get('relevant_ids', [])}")
-    metrics = evaluate(retrieved_ids, eval_cfg.get('relevant_ids', []), ret_cfg.get('top_k', 5))
-    # Get batch size and retries from config
-    batch_size = vdb_cfg.get('batch_size', 'N/A')
-    upsert_retries = vdb_cfg.get('upsert_retries', 'N/A')
+    eval_metrics = evaluate(retrieved_ids, eval_cfg.get('relevant_ids', []), ret_cfg.get('top_k', 5))
     
-    # Calculate embeddings per second
-    if embedding_time > 0 and len(embeddings) > 0:
-        embeddings_per_second = len(embeddings) / embedding_time
-    else:
-        embeddings_per_second = 0
+    # Calculate rates
+    embeddings_per_second = (len(embeddings) / embedding_time if 'embeddings' in locals() 
+                           and embeddings is not None and embedding_time > 0 else 0)
+    
+    processing_rate = (len(texts) / data_load_time if 'texts' in locals() 
+                      and texts is not None and data_load_time > 0 else 0)
         
-    # Calculate processing rate
-    if data_load_time > 0 and len(texts) > 0:
-        processing_rate = len(texts) / data_load_time
-    else:
-        processing_rate = 0
-    
-    metrics.update({
+    # Initialize metrics with all values
+    metrics = {
         # Timing metrics
         'data_load_time': data_load_time,
         'embedding_time': embedding_time,
         'insertion_time': insertion_time,
-        'retrieval_time': retrieval_time if 'retrieval_time' in locals() else 0,
+        'retrieval_time': retrieval_time if 'retrieval_time' in locals() else 0.0,
         
-        # Performance rates
-        'processing_rate': f"{processing_rate:.2f}",
-        'embeddings_per_second': f"{embeddings_per_second:.2f}",
-        'total_embeddings': len(embeddings),
+        # Performance metrics
+        'processing_rate': f"{processing_rate:.2f}" if 'processing_rate' in locals() else '0.00',
+        'embeddings_per_second': f"{embeddings_per_second:.2f}" if 'embeddings_per_second' in locals() else '0.00',
+        'total_embeddings': len(embeddings) if 'embeddings' in locals() and embeddings is not None else 0,
         
-        # Configuration
-        'batch_size': batch_size,
-        'upsert_retries': upsert_retries
-    })
+        # Embedding configuration
+        'embedding_batch_size': emb_cfg.get('batch_size', 'N/A'),
+        'embedding_dimension': emb_cfg.get('dimension', 'N/A'),
+        'normalize': emb_cfg.get('normalize', True),
+        'use_pca': emb_cfg.get('use_pca', False),
+        
+        # Vector DB configuration
+        'db_type': vdb_cfg.get('type', 'qdrant'),
+        'db_batch_size': vdb_cfg.get('batch_size', 'N/A'),
+        'db_upsert_retries': vdb_cfg.get('upsert_retries', 'N/A'),
+        'db_retry_delay': vdb_cfg.get('upsert_retry_delay', 'N/A'),
+        'vector_index': vdb_cfg.get('vector_index', {}),
+        'payload_index': vdb_cfg.get('payload_index', []),
+        
+        # Retrieval configuration
+        'semantic_query': ret_cfg.get('semantic_query', 'N/A') if 'ret_cfg' in locals() else 'N/A',
+        'top_k': ret_cfg.get('top_k', 5) if 'ret_cfg' in locals() else 5,
+        'filter_applied': bool(payload_filter_cfg) if 'payload_filter_cfg' in locals() else False,
+        
+        # Evaluation metrics
+        'precision': eval_metrics.get('precision', 0.0),
+        'recall': eval_metrics.get('recall', 0.0),
+        'f1_score': eval_metrics.get('f1', 0.0)
+    }
     return metrics
 
 def main() -> None:

@@ -19,12 +19,21 @@ def retrieve_qdrant(client, collection, embeddings, top_k, semantic_query=None, 
     retrieved_ids = [hit.id for hit in search_res]
     return retrieved_ids
 
-def retrieve_qdrant_with_results(client, collection, semantic_query, embed_model, top_k, payload_filter_cfg=None):
+def retrieve_qdrant_with_results(client, collection, semantic_query, embed_model, top_k, payload_filter_cfg=None, query_embedding=None):
     """
     Retrieve from Qdrant using semantic query, returning both IDs and payloads.
+    
+    Args:
+        client: Qdrant client instance
+        collection: Collection name
+        semantic_query: Query text
+        embed_model: SentenceTransformer model
+        top_k: Number of results to return
+        payload_filter_cfg: Filter configuration for payloads
+        query_embedding: Pre-computed query embedding (optional)
     """
-    # Build Qdrant payload filter from config
-    query_emb = embed_model.encode([semantic_query], show_progress_bar=False)[0]
+    # Use provided query embedding or generate new one
+    query_emb = query_embedding if query_embedding is not None else embed_model.encode([semantic_query], show_progress_bar=False)[0]
     must_conditions = []
     if payload_filter_cfg:
         for key, val in payload_filter_cfg.items():

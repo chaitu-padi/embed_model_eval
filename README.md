@@ -77,18 +77,27 @@ embed_model_eval/
 ```yaml
 embed_config:
   models:                        # List of models to evaluate
-    - "all-mpnet-base-v2"
-    - "all-MiniLM-L6-v2"
+    - "all-mpnet-base-v2"       # 768-dimensional vectors
+    - "all-MiniLM-L6-v2"        # 384-dimensional vectors
   default_model: "all-mpnet-base-v2"  # Default if no models specified
-  dimension: 384                  # Target dimension
+  dimension: 384                  # Target dimension for all models
   batch_size: 256                # Batch size for embedding
-  use_pca: true                  # Enable PCA reduction
-  normalize: true                # Normalize vectors
+  use_pca: true                  # Enable PCA reduction for dimension mismatch
+  normalize: true                # Normalize vectors after PCA
   parallelism: 4                 # Number of parallel processes
-  pca_config:                    # PCA settings
+  pca_config:                    # PCA settings (applied when dimensions don't match)
     random_state: 42
     whiten: false
+  model_dimensions:              # Native dimensions for each model (optional)
+    all-mpnet-base-v2: 768
+    all-MiniLM-L6-v2: 384
 ```
+
+Note: When running multiple models with different dimensions:
+1. Set `use_pca: true` to enable automatic dimension reduction
+2. Set `dimension` to your desired target dimension (all models will be reduced/matched to this)
+3. Models with matching dimensions will skip PCA
+4. Optional: Specify `model_dimensions` to validate dimensions at startup
 
 ### Vector Database Configuration
 ```yaml
@@ -215,10 +224,23 @@ The framework includes robust error handling for:
 ## Troubleshooting
 
 Common issues and solutions:
-1. Dimension Mismatch:
+1. Dimension Mismatch with Multiple Models:
+   ```
+   Error: Vector dimension error: expected dim: 384, got 768
+   Solution: 
+   1. Enable PCA in config: use_pca: true
+   2. Set target dimension: dimension: 384
+   3. Models with matching dimensions will skip PCA
+   4. Check model_dimensions in config for validation
+   ```
+
+2. Model Dimension Conflicts:
    ```
    ValueError: Model dimension mismatch: Model outputs 768-d vectors but config requires 384-d
-   Solution: Enable PCA or adjust target dimension
+   Solution:
+   1. Set consistent target dimension in config
+   2. Enable PCA reduction for automatic handling
+   3. Or use models with matching dimensions only
    ```
 
 2. Memory Issues:

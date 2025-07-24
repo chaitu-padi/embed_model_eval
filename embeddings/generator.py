@@ -4,6 +4,23 @@ import logging
 from sentence_transformers import SentenceTransformer
 from typing import List, Any, Dict, Optional
 from sklearn.decomposition import PCA
+import os
+import joblib
+
+# Global variable to store PCA model
+_pca_model = None
+
+def load_pca_model(target_dim: int, pca_config: Optional[Dict] = None) -> Optional[PCA]:
+    """Load the PCA model if it exists, otherwise return None."""
+    global _pca_model
+    if _pca_model is not None and _pca_model.n_components_ == target_dim:
+        return _pca_model
+    
+    # Try to load from disk
+    pca_file = f'pca_model_{target_dim}d.joblib'
+    if os.path.exists(pca_file):
+        return joblib.load(pca_file)
+    return None
 
 def get_model_dimension(model_name: str) -> int:
     """Get the output dimension of a SentenceTransformer model."""
@@ -71,19 +88,41 @@ def generate_embeddings(
         device=device
     )
     
-    # Check if we need to apply PCA
-    if use_pca and embeddings.shape[1] != target_dim:
-        print(f"Reducing embedding dimension from {embeddings.shape[1]} to {target_dim} using PCA")
-        pca_params = pca_config or {}
-        pca = PCA(
-            n_components=target_dim,
-            random_state=pca_params.get('random_state', 42),
-            whiten=pca_params.get('whiten', False)
-        )
-        embeddings = pca.fit_transform(embeddings)
-        
-        # Normalize after PCA if requested
-        if normalize:
+    # Always check dimensions and apply PCA if needed
+    # Save PCA model for query transformation if needed
+    global _pca_model
+    current_dim = embeddings.shape[1]
+    if current_dim != target_dim:
+        if use_pca:
+            logging.info(f"Reducing embedding dimension from {current_dim} to {target_dim} using PCA")
+            pca_params = pca_config or {}
+            # Create and fit PCA model
+            global _pca_model
+            _pca_model = PCA(
+                n_components=target_dim,
+                random_state=pca_params.get('random_state', 42),
+                whiten=pca_params.get('whiten', False)
+            )
+            embeddings = _pca_model.fit_transform(embeddings)
+            
+            # Save PCA model for later use with queries
+            pca_file = f'pca_model_{target_dim}d.joblib'
+            joblib.dump(_pca_model, pca_file)
+            logging.info(f"Saved PCA model to {pca_file}")
+            
+            # Always normalize after PCA to ensure consistent magnitudes
             embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+        else:
+            raise ValueError(
+                f"Dimension mismatch: Model {model_name} produced {current_dim}-d vectors, "
+                f"but target dimension is {target_dim}. Enable PCA reduction or use matching dimensions."
+            )
+    
+    # Validate final dimensions
+    if embeddings.shape[1] != target_dim:
+        raise ValueError(
+            f"Final embedding dimension ({embeddings.shape[1]}) does not match target ({target_dim}). "
+            "This should not happen - please report this error."
+        )
     
     return embeddings

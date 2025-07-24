@@ -4,7 +4,7 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
     
     Args:
         model_names (list): List of model names to compare
-        ds (dict): Data source configuration
+        model_names (list): List of model names to compare): Data source configuration
         db_type (str): Database type
         host (str): Database host
         port (str/int): Database port
@@ -289,8 +289,12 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
             <td colspan="{len(model_names) + 1}">Processing Parameters</td>
         </tr>
         <tr>
-            <td>Batch Size</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("batch_size", batch_size)}</td>' for model in model_names])}
+            <td>Embedding Batch Size</td>
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("embedding_batch_size", "N/A")}</td>' for model in model_names])}
+        </tr>
+        <tr>
+            <td>Vector DB Batch Size</td>
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("db_batch_size", "N/A")}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Parallelism</td>
@@ -339,16 +343,20 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
             <td colspan="2">Insertion Configuration</td>
         </tr>
         <tr>
-            <td>Insert Batch Size</td>
-            <td class="metric-value">{metrics.get('batch_size', 'N/A')}</td>
+            <td>Insertion Batch Size</td>
+            <td class="metric-value">{all_metrics[model_names[0]]['db_batch_size']}</td>
         </tr>
         <tr>
             <td>Upsert Retries</td>
-            <td class="metric-value">{metrics.get('upsert_retries', 'N/A')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]]['db_upsert_retries']}</td>
+        </tr>
+        <tr>
+            <td>Retry Delay (s)</td>
+            <td class="metric-value">{all_metrics[model_names[0]]['db_retry_delay']}</td>
         </tr>
         <tr>
             <td>Vector Distance</td>
-            <td class="metric-value">{metrics.get('distance_type', 'COSINE')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('distance_type', 'COSINE')}</td>
         </tr>
     </table>
     <!-- 5. Vector Database Retrieval Configuration -->
@@ -363,26 +371,26 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>Search Type</td>
-            <td class="metric-value">{metrics.get('search_type', 'semantic')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('search_type', 'semantic')}</td>
         </tr>
         <tr>
             <td>Top-K Results</td>
-            <td class="metric-value">{metrics.get('top_k', top_k)}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('top_k', top_k)}</td>
         </tr>
         <tr>
             <td>Distance Metric</td>
-            <td class="metric-value">{metrics.get('distance_metric', 'COSINE')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('distance_metric', 'COSINE')}</td>
         </tr>
         <tr class="module-header">
             <td colspan="2">Query Configuration</td>
         </tr>
         <tr>
             <td>Semantic Query</td>
-            <td class="metric-value">{metrics.get('semantic_query', 'N/A')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('semantic_query', 'N/A')}</td>
         </tr>
         <tr>
             <td>Filter Applied</td>
-            <td class="metric-value">{str(metrics.get('filter_applied', 'No'))}</td>
+            <td class="metric-value">{str(all_metrics[model_names[0]].get('filter_applied', 'No'))}</td>
         </tr>
     </table>
 
@@ -502,45 +510,45 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>CPU Usage</td>
-            <td class="metric-value">Peak: {metrics.get('peak_cpu_usage', 'N/A')}%, Average: {metrics.get('avg_cpu_usage', 'N/A')}%</td>
+            <td class="metric-value">Peak: {all_metrics[model_names[0]].get('peak_cpu_usage', 'N/A')}%, Average: {all_metrics[model_names[0]].get('avg_cpu_usage', 'N/A')}%</td>
         </tr>
         <tr>
             <td>Memory Usage</td>
-            <td class="metric-value">Peak: {metrics.get('peak_memory_mb', 'N/A')} MB, Average: {metrics.get('avg_memory_mb', 'N/A')} MB</td>
+            <td class="metric-value">Peak: {all_metrics[model_names[0]].get('peak_memory_mb', 'N/A')} MB, Average: {all_metrics[model_names[0]].get('avg_memory_mb', 'N/A')} MB</td>
         </tr>
         <tr>
             <td>GPU Resources</td>
-            <td class="metric-value">Memory Used: {metrics.get('gpu_memory_used', 'N/A')} GB, Utilization: {metrics.get('gpu_utilization', 'N/A')}%</td>
+            <td class="metric-value">Memory Used: {all_metrics[model_names[0]].get('gpu_memory_used', 'N/A')} GB, Utilization: {all_metrics[model_names[0]].get('gpu_utilization', 'N/A')}%</td>
         </tr>
         <tr class="module-header">
             <td colspan="2">Processing Pipeline</td>
         </tr>
         <tr>
             <td>Data Processing</td>
-            <td class="metric-value">Processed {metrics.get('total_records', 'N/A')} records at {metrics.get('processing_rate', 'N/A')} records/second</td>
+            <td class="metric-value">Processed {all_metrics[model_names[0]].get('total_records', 'N/A')} records at {all_metrics[model_names[0]].get('processing_rate', 'N/A')} records/second</td>
         </tr>
         <tr>
             <td>Embedding Generation</td>
-            <td class="metric-value">Generated {metrics.get('total_embeddings', 'N/A')} embeddings at {metrics.get('embeddings_per_second', 'N/A')} embeddings/second</td>
+            <td class="metric-value">Generated {all_metrics[model_names[0]].get('total_embeddings', 'N/A')} embeddings at {all_metrics[model_names[0]].get('embeddings_per_second', 'N/A')} embeddings/second (Batch Size: {all_metrics[model_names[0]].get('embedding_batch_size', 'N/A')})</td>
         </tr>
         <tr>
             <td>Database Operations</td>
-            <td class="metric-value">Indexed and inserted {metrics.get('total_embeddings', 'N/A')} vectors into {db_type} collection '{collection}'</td>
+            <td class="metric-value">Indexed and inserted {all_metrics[model_names[0]].get('total_embeddings', 'N/A')} vectors into {db_type} collection '{collection}' (Batch Size: {all_metrics[model_names[0]].get('db_batch_size', 'N/A')})</td>
         </tr>
         <tr class="module-header">
             <td colspan="2">Overall Performance</td>
         </tr>
         <tr>
             <td>Quality Metrics</td>
-            <td class="metric-value">Achieved Precision@{top_k}: {metrics['precision']:.3f}, Recall@{top_k}: {metrics['recall']:.3f}, F1: {metrics['f1']:.3f}</td>
+            <td class="metric-value">Achieved Precision@{top_k}: {all_metrics[model_names[0]].get('precision', 0.0):.3f}, Recall@{top_k}: {all_metrics[model_names[0]].get('recall', 0.0):.3f}, F1: {all_metrics[model_names[0]].get('f1', 0.0):.3f}</td>
         </tr>
         <tr>
             <td>Time Distribution</td>
-            <td class="metric-value">Processing: {metrics.get('data_load_time', 'N/A')}s, Embedding: {embedding_time}s, Database: {metrics.get('insertion_time', 'N/A')}s</td>
+            <td class="metric-value">Processing: {all_metrics[model_names[0]].get('data_load_time', 'N/A')}s, Embedding: {all_metrics[model_names[0]].get('embedding_time', 'N/A')}s, Database: {all_metrics[model_names[0]].get('insertion_time', 'N/A')}s</td>
         </tr>
         <tr>
             <td>Final Assessment</td>
-            <td class="metric-value">Successfully processed and indexed dataset with {metrics.get('total_embeddings', 'N/A')} embeddings, achieving {metrics['f1']:.3f} F1-score</td>
+            <td class="metric-value">Successfully processed and indexed dataset with {all_metrics[model_names[0]].get('total_embeddings', 'N/A')} embeddings, achieving {all_metrics[model_names[0]].get('f1', 0.0):.3f} F1-score</td>
         </tr>
     </table>
     </div>
@@ -553,18 +561,20 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
     print("\n==== Embedding Model Performance Report ====")
     print(f"Report saved to {report_filename}")
     print("Summary:")
-    print(f"Embedding Model: {model_name}")
-    print(f"Data Source: {ds['type']} ({data_path}) Size: {data_size} bytes")
-    print(f"Vector DB: {db_type} ({host}:{port}) Collection: {collection}")
-    print(f"PyTorch Device: {device} ({device_name})")
-    print(f"Embedding Generation Time: {metrics.get('embedding_time', embedding_time):.2f} seconds")
-    print(f"Total Embeddings: {metrics.get('total_embeddings', 'N/A')}")
-    print(f"Embedding Insertion Time: {metrics.get('insertion_time', embedding_time)} seconds")
-    print(f"Batch Size: {metrics.get('batch_size', 'N/A')}")
-    print(f"Retries: {metrics.get('upsert_retries', 'N/A')}")
-    print(f"Retrieval Time: {metrics.get('retrieval_time', retrieval_time):.2f} seconds")
-    print(f"Top-K: {metrics.get('top_k', top_k)}")
-    print(f"Accuracy: {metrics['accuracy']:.3f}")
-    print(f"Recall: {metrics['recall']:.3f}")
-    print(f"Precision: {metrics['precision']:.3f}")
-    print(f"F1 Score: {metrics['f1']:.3f}")
+    for model_name in model_names:
+        model_metrics = all_metrics[model_name]
+        print(f"\nModel: {model_name}")
+        print(f"Data Source: {ds['type']} ({data_path}) Size: {data_size} bytes")
+        print(f"Vector DB: {db_type} ({host}:{port}) Collection: {collection}")
+        print(f"PyTorch Device: {device} ({device_name})")
+        print(f"Embedding Generation Time: {model_metrics.get('embedding_time', 0.0):.2f} seconds")
+        print(f"Total Embeddings: {model_metrics.get('total_embeddings', 'N/A')}")
+        print(f"Embedding Insertion Time: {model_metrics.get('insertion_time', 0.0):.2f} seconds")
+        print(f"Embedding Batch Size: {model_metrics.get('embedding_batch_size', 'N/A')}")
+        print(f"DB Batch Size: {model_metrics.get('db_batch_size', 'N/A')}")
+        print(f"DB Retries: {model_metrics.get('db_upsert_retries', 'N/A')}")
+        print(f"Retrieval Time: {model_metrics.get('retrieval_time', 0.0):.2f} seconds")
+        print(f"Top-K: {model_metrics.get('top_k', top_k)}")
+        print(f"Precision: {model_metrics.get('precision', 0.0):.3f}")
+        print(f"Recall: {model_metrics.get('recall', 0.0):.3f}")
+        print(f"F1 Score: {model_metrics.get('f1', 0.0):.3f}")

@@ -23,7 +23,7 @@ data_source:
 
 # 2. Embedding Parameters
 embed_config:
-  models: ["all-MiniLM-L6-v2", "all-mpnet-base-v2"]  # List of models to evaluate
+  models: ["all-mpnet-base-v2", "all-MiniLM-L6-v2" ]  # List of models to evaluate
   default_model: "all-MiniLM-L6-v2"                  # Default model for single-model operations
   batch_size: 256                 # Increased batch size
   normalize: true
