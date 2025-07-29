@@ -1,5 +1,4 @@
 # Comprehensive configuration for embedding evaluation
-# Allowed values/types for each parameter are shown in comments
 
 #debug retreival
 debug_retrieval_only: false
@@ -7,8 +6,8 @@ debug_retrieval_only: false
 
 # 1. Data Source Configuration
 data_source:
-  type: csv                                  # str: 'csv', 'oracle', 'json', 'txt'
-  file: 'data/output/split_0_25MB.csv'           #Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
+  type: csv                                      # str: 'csv', 'oracle', 'json', 'txt'
+  file: 'data/output/split_0_5MB.csv'           # Combined_Flights_2022.csv            # str: path to file (if type is 'csv', 'json', 'txt')
   embed_columns: ["FlightDate", "Airline", "Origin", "Dest", "Cancelled", "Diverted", "DepDelayMinutes", "OriginStateName", "DestStateName", "ArrTimeBlk"]                        # str or list[str]: 'all' for full file, or list of column names for selective embedding
 
   # embed_columns: all                      # embed entire file
@@ -23,23 +22,23 @@ data_source:
 
 # 2. Embedding Parameters
 embed_config:
-  models: ["all-mpnet-base-v2", "all-MiniLM-L6-v2" ]  # List of models to evaluate
+  models: ["all-MiniLM-L6-v2", "paraphrase-distilroberta-base-v1" ] # List of models to evaluate 
   default_model: "all-MiniLM-L6-v2"                  # Default model for single-model operations
-  batch_size: 256                 # Increased batch size
+  batch_size: 256                                    # Increased batch size
   normalize: true
   optimization:
     use_gpu: true
     half_precision: true
-    num_workers: 8                # Number of CPU workers for data loading
-  dimension: 384                  # Target dimension after PCA if needed
-  use_pca: true                  # Whether to use PCA for dimension reduction
+    num_workers: 8                                   # Number of CPU workers for data loading
+  dimension: 384                                     # Target dimension after PCA if needed
+  use_pca: true                                      # Whether to use PCA for dimension reduction
   pca_config:
     random_state: 42
-    whiten: false                # Whether to scale the components to unit variance
-  indexing_type: flat             # str: 'flat', 'ivf', 'hnsw'
-  normalize: true                 # bool
-  embedding_type: semantic        # str: 'semantic', 'dense', 'sparse', 'hybrid'
-  search_type: semantic           # str: 'semantic', 'dense', 'sparse', 'hybrid'
+    whiten: false                                    # Whether to scale the components to unit variance
+  indexing_type: flat                                # str: 'flat', 'ivf', 'hnsw'
+  normalize: true                                    # bool
+  embedding_type: semantic                           # str: 'semantic', 'dense', 'sparse', 'hybrid'
+  search_type: semantic                              # str: 'semantic', 'dense', 'sparse', 'hybrid'
   # For OpenAI/Cohere models, add api_key fields as needed
   # openai_api_key: sk-...
   # cohere_api_key: ...
@@ -65,7 +64,7 @@ vector_db:
     type: hnsw                    # str: 'plain', 'hnsw', 'ivf', etc.
     params:
       m: 16                       # int: HNSW parameter (example)
-      ef_construct: 100           # int: HNSW parameter (example)
+      ef_construct: 256           # int: HNSW parameter (example)
   payload_index:
     - field: Origin
       type: keyword
@@ -75,21 +74,29 @@ vector_db:
       type: float 
               
  
-
 # 5. Retrieval & Evaluation Parameters
 retrieval:
   enabled: true                   # bool
-  top_k: 5                        # int
-  metric_type: COSINE                 # str: 'L2', 'IP', 'COSINE', 'EUCLID', 'DOT'
-  nprobe: 10                      # int (Milvus)
-  distance: COSINE                # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
-  filter: ""                      # str: filter expression (if supported)
-  semantic_query: "Find flights,which origin from IND on date April 1st 2022 which are delayed for longer time" # str: query for semantic search
+  top_k: 10                       # Increased for better recall
+  score_threshold: 0.4          # Slightly lowered threshold for more results
+  metric_type: COSINE            # str: 'L2', 'IP', 'COSINE', 'EUCLID', 'DOT'
+  nprobe: 256                    # Increased for better search accuracy (Milvus)
+  distance: COSINE               # str (Qdrant): 'COSINE', 'EUCLID', 'DOT'
+  filter: ""                     # str: filter expression (if supported)
+  semantic_query: "Find flights departing from Indianapolis International Airport (IND) on April 1st 2022 which experienced departure delays" # More specific query
+  rerank_results: true          # Enable reranking for better relevance
+  diversity_weight: 0.2         # Lowered to prioritize relevancerameter are shown in comments
   payload_filter:
-    Origin: "IND"
-    FlightDate: "2022-04-01"
-    DepDelayMinutes:
-      gte: 37
+    must:
+      - key: "Origin"
+        match:
+          value: "IND"
+      - key: "FlightDate"
+        match:
+          value: "2022-04-01"
+  #    - key: "DepDelayMinutes"
+  #      range:
+  #        gte: 37
   order_by:
     - field: DepDelayMinutes
       order: desc
@@ -102,7 +109,7 @@ retrieval:
       #lte: "2022-04-01"
 
 evaluation:
-  relevant_ids: [1488,1418] #[3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
+  relevant_ids: [609,631,701,709] #[3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
   metrics: [accuracy, recall, precision, f1]     # list[str]: metrics to compute
 
 # Example values for each parameter are shown above. See app.py for allowed values.

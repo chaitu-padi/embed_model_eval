@@ -76,17 +76,20 @@ def generate_embeddings(
         logging.warning(f"PCA is enabled but not needed - model dimension ({model_dim}) "
                        f"already matches target dimension ({target_dim}). PCA will be skipped.")
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SentenceTransformer(model_name, device=device)
+    # Use embedder to get model and track resources
+    from embedding_models.embedder import embed_texts
     
-    # Generate initial embeddings
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size,
-        show_progress_bar=True,
-        normalize_embeddings=normalize,
-        device=device
-    )
+    # Generate embeddings and get metrics
+    embeddings, model_metrics = embed_texts(texts, {
+        'model': model_name,
+        'batch_size': batch_size,
+        'normalize': normalize,
+        'device': "cuda" if torch.cuda.is_available() else "cpu"
+    })
+    
+    # Ensure embeddings are in numpy array format
+    if not isinstance(embeddings, np.ndarray):
+        embeddings = np.array(embeddings)
     
     # Always check dimensions and apply PCA if needed
     # Save PCA model for query transformation if needed
@@ -125,4 +128,4 @@ def generate_embeddings(
             "This should not happen - please report this error."
         )
     
-    return embeddings
+    return embeddings, model_metrics

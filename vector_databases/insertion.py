@@ -124,12 +124,15 @@ def insert_embeddings_qdrant(
         Tuple of (QdrantClient, insertion_time)
     """
     start_time = time.time()
+    metrics = {}
     
     try:
         client = QdrantClient(host=host, port=port)
         
-        # Ensure collection exists before insertion
+        # Record collection creation/index build time
+        index_start_time = time.time()
         ensure_collection_exists(client, collection_name, vector_size)
+        metrics['index_build_time'] = time.time() - index_start_time
         
         # Prepare points with payloads
         points = []
@@ -169,7 +172,12 @@ def insert_embeddings_qdrant(
                 raise
         
         insertion_time = time.time() - start_time
-        return client, insertion_time
+        total_vectors = len(embeddings)
+        metrics.update({
+            'insertion_time': insertion_time,
+            'insert_rate': total_vectors / insertion_time if insertion_time > 0 else 0
+        })
+        return client, metrics
         
     except Exception as e:
         logging.error(f"Error inserting into Qdrant: {str(e)}")

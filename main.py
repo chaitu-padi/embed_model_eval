@@ -15,20 +15,38 @@ def setup_logging() -> None:
     """Configure logging format and level"""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s'
+        format='%(asctime)s [%(filename)s:%(lineno)d] %(levelname)s: %(message)s'
     )
 
 def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     """Execute the main embedding evaluation pipeline for a specific model"""
     debug_retrieval_only = config.get('debug_retrieval_only', False)
-    vdb_cfg = config['vector_db']
+    vdb_cfg = config['vector_db'].copy()  # Create a copy to avoid modifying original
     emb_cfg = config['embed_config']
     
-    # Update the collection name to include model name and target dimension
-    model_safe_name = model_name.replace('/', '_').replace('-', '_')
-    dimension = emb_cfg.get('dimension', 384)  # Get target dimension
-    vdb_cfg['collection'] = f"{vdb_cfg.get('collection', 'embeddings')}_{model_safe_name}_{dimension}d"
+    # Get base collection name from config and dimension
+    base_collection = config['vector_db'].get('collection', 'embeddings')  # Get from original config
+    dimension = emb_cfg.get('dimension', 384)
     
+    # Create collection name with exact model name and dimension
+    vdb_cfg['collection'] = f"{base_collection}_{model_name}_{dimension}"
+    logging.info(f"Created collection name: {vdb_cfg['collection']}")
+    
+
+    """
+    # Clean up existing collection before use
+    if not debug_retrieval_only:
+        from qdrant_client import QdrantClient
+        db_client = QdrantClient(
+            host=vdb_cfg.get('host', 'localhost'),
+            port=int(vdb_cfg.get('port', 6333))
+        )
+        try:
+            db_client.delete_collection(vdb_cfg['collection'])
+            logging.info(f"[Setup] Cleaned up existing collection: {vdb_cfg['collection']}")
+        except Exception as e:
+            logging.info(f"[Setup] No existing collection to clean: {e}")
+    """
     # Validate PCA settings when using multiple models
     if model_name in emb_cfg.get('models', []):
         if not emb_cfg.get('use_pca', False):
@@ -45,9 +63,14 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
             host=vdb_cfg.get('host', 'localhost'),
             port=int(vdb_cfg.get('port', 6333))
         )
+        # Get the collection info to get total vector count
+        collection_info = db_client.get_collection(vdb_cfg['collection'])
+        total_embeddings = collection_info.points_count
+        logging.info(f"[DEBUG] Found {total_embeddings} existing embeddings in collection {vdb_cfg['collection']}")
+        
         emb_cfg = config['embed_config']
         model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
-        embeddings = []
+        embeddings = None  # Set to None instead of empty list to indicate no new embeddings
         data_load_time = 0
         embedding_time = 0
         insertion_time = 0
@@ -61,7 +84,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         logging.info(f"[Step 1 end] Loaded {len(df)} rows. Time taken: {data_load_time:.2f} seconds.")
 
         # 2. Generate embeddings 
-        logging.info("\n[Step 2 start] Generating Embeddings ...")
+        logging.info("[Step 2 start] Generating Embeddings ...")
         from embeddings.generator import generate_embeddings
         emb_cfg = config['embed_config']
         t1 = time.time()
@@ -78,7 +101,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         if 'use_pca' not in emb_cfg:
             raise ValueError("use_pca must be specified in embed_config")
             
-        embeddings = generate_embeddings(
+        embeddings, model_metrics = generate_embeddings(
             texts=texts,
             model_name=emb_cfg['model'],
             batch_size=int(emb_cfg['batch_size']),
@@ -89,35 +112,41 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         )
         embedding_time = time.time() - t1
         logging.info(f"[Step 2 end] Generated {len(embeddings)} embeddings. Time taken: {embedding_time:.2f} seconds.")
+        logging.info(f"[Step 2 metrics] Model load time: {model_metrics['model_load_time']:.2f}s, "
+                    f"Memory usage: {model_metrics['model_memory_mb']:.2f}MB, "
+                    f"GPU memory: {model_metrics['gpu_memory_used']:.2f}GB")
 
         # 3. Insert into vector database
         logging.info("[Step 3 start] Vector Database Insertion...")
         from vector_databases.insertion import insert_embeddings_qdrant, setup_qdrant_indexing
         t2 = time.time()
-        db_client, insertion_time = insert_embeddings_qdrant(
+        db_client, db_metrics = insert_embeddings_qdrant(
             embeddings,
             texts,
             payloads,
             collection_name=vdb_cfg.get('collection', 'embeddings'),
-            vector_size=emb_cfg.get('dimension', 768),
+            vector_size=emb_cfg.get('dimension', 384),
             host=vdb_cfg.get('host', 'localhost'),
             port=int(vdb_cfg.get('port', 6333)),
             batch_size=int(vdb_cfg.get('batch_size', 100))
         )
-        insertion_time = time.time() - t2
-        logging.info(f"[Step 3 end] Inserted embeddings into vector DB. Time taken: {insertion_time:.2f} seconds.")
+        insertion_time = db_metrics['insertion_time']
+        logging.info(f"[Step 3 end] Inserted embeddings into vector DB. Time taken: {insertion_time:.2f} seconds. Insert rate: {db_metrics['insert_rate']:.2f} vectors/second.")
 
         # 4. Configure indexing (if Qdrant)
         if vdb_cfg.get('type', '').lower() == 'qdrant':
-            logging.info("\n[Step 4 start] Configuring Qdrant indexing...")
+            logging.info("[Step 4 start] Configuring Qdrant indexing...")
             setup_qdrant_indexing(
                 db_client,
                 vdb_cfg.get('collection', 'embeddings'),
                 vdb_cfg.get('vector_index', {}),
                 vdb_cfg.get('payload_index', [])
             )
-            logging.info("\n[Step 4 end] Qdrant indexing configured.")
+            logging.info("[Step 4 end] Qdrant indexing configured.")
 
+    # Initialize metrics dictionary
+    metrics = {}
+    
     # 5. Retrieval
     logging.info("[Step 5 start] Qdrant retrieval...")
     t3 = time.time()  # Start timing retrieval
@@ -152,26 +181,58 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 logging.info(f"[Step 5] Performing semantic search: {semantic_query}")
                 # Generate query embedding with proper dimension
                 if not debug_retrieval_only:
-                    # For single query, use the original model dimension and normalize if needed
+                    # Get the model's output dimension
+                    from embeddings.generator import get_model_dimension
+                    model_dim = get_model_dimension(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
+                    
+                    # For single query, get the base model output first
                     query_embedding = embed_model.encode(
                         [semantic_query],
-                        normalize_embeddings=emb_cfg.get('normalize', True),
+                        normalize_embeddings=False,  # Don't normalize yet
                         convert_to_numpy=True
                     )[0]
                     
-                    # If PCA was used for the collection vectors, we need to load the same PCA model
-                    if use_pca:
+                    # If PCA was used and dimensions don't match target
+                    if use_pca and model_dim != target_dim:
                         from embeddings.generator import load_pca_model
                         pca = load_pca_model(target_dim, pca_config)
                         if pca is not None:
+                            # Transform the query embedding using the same PCA model
                             query_embedding = pca.transform([query_embedding])[0]
-                            # Normalize after PCA if specified
-                            if emb_cfg.get('normalize', True):
-                                query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                        else:
+                            logging.warning(f"PCA model not found for dimension {target_dim}. Using original embedding.")
                     
-                    results = retrieve_qdrant_with_results(db_client, collection_name, semantic_query, embed_model, top_k, payload_filter_cfg, query_embedding)
+                    # Apply normalization after all dimension adjustments
+                    if emb_cfg.get('normalize', True):
+                        query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                    
+                    results, query_metrics = retrieve_qdrant_with_results(
+                        db_client,
+                        collection_name,
+                        semantic_query,
+                        embed_model,
+                        top_k,
+                        config=config,
+                        payload_filter_cfg=payload_filter_cfg,
+                        query_embedding=query_embedding
+                    )
                 else:
-                    results = retrieve_qdrant_with_results(db_client, collection_name, semantic_query, embed_model, top_k, payload_filter_cfg)
+                    results, query_metrics = retrieve_qdrant_with_results(
+                        db_client,
+                        collection_name,
+                        semantic_query,
+                        embed_model,
+                        top_k,
+                        config=config,
+                        payload_filter_cfg=payload_filter_cfg
+                    )
+                
+                # Update metrics with query performance data
+                metrics.update({
+                    'avg_query_time': query_metrics['avg_query_time'],
+                    'query_throughput': query_metrics['query_throughput'],
+                    'total_query_time': query_metrics['total_query_time']
+                })
                 
                 for idx, (rid, payload) in enumerate(results):
                     payload_str = ', '.join([f"{i}:{k}={v}" for i, (k, v) in enumerate(payload.items())]) if payload else 'None'
@@ -217,11 +278,22 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         'embedding_time': embedding_time,
         'insertion_time': insertion_time,
         'retrieval_time': retrieval_time if 'retrieval_time' in locals() else 0.0,
+        'model_load_time': model_metrics['model_load_time'] if 'model_metrics' in locals() else 0.0,
+        
+        # Resource metrics
+        'model_memory_mb': model_metrics['model_memory_mb'] if 'model_metrics' in locals() else 0.0,
+        'gpu_memory_used': model_metrics['gpu_memory_used'] if 'model_metrics' in locals() else 0.0,
+        'device': model_metrics['device'] if 'model_metrics' in locals() else 'cpu',
+        'index_build_time': db_metrics.get('index_build_time', 0.0) if 'db_metrics' in locals() else 0.0,
+        'insert_rate': db_metrics.get('insert_rate', 0.0) if 'db_metrics' in locals() else 0.0,
         
         # Performance metrics
         'processing_rate': f"{processing_rate:.2f}" if 'processing_rate' in locals() else '0.00',
         'embeddings_per_second': f"{embeddings_per_second:.2f}" if 'embeddings_per_second' in locals() else '0.00',
-        'total_embeddings': len(embeddings) if 'embeddings' in locals() and embeddings is not None else 0,
+        'total_embeddings': (
+            total_embeddings if 'total_embeddings' in locals()
+            else (len(embeddings) if 'embeddings' in locals() and embeddings is not None else 0)
+        ),
         
         # Embedding configuration
         'embedding_batch_size': emb_cfg.get('batch_size', 'N/A'),
@@ -275,10 +347,14 @@ def main() -> None:
     
     # Run pipeline for each model
     for model_name in models_to_evaluate:
-        logging.info(f"\n[Process] Evaluating model: {model_name}")
+        logging.info(f"[Process] Evaluating model: {model_name}")
         
-        # Create a copy of config for this model
-        model_config = config.copy()
+        # Create a deep copy of config for this model
+        model_config = {
+            **config.copy(),
+            'vector_db': config['vector_db'].copy(),  # Ensure clean copy of vector_db config
+            'embed_config': config['embed_config'].copy()  # Ensure clean copy of embed_config
+        }
         model_config['embed_config']['model'] = model_name
         
         # Run pipeline and get metrics
