@@ -97,31 +97,33 @@ def generate_embeddings(
     current_dim = embeddings.shape[1]
     if current_dim != target_dim:
         if use_pca:
-            logging.info(f"Reducing embedding dimension from {current_dim} to {target_dim} using PCA")
+            n_samples, n_features = embeddings.shape
+            n_components = min(target_dim, n_samples, n_features)
+            if target_dim > n_components:
+                logging.warning(f"[PCA] Requested n_components={target_dim} exceeds min(n_samples, n_features)={n_components}. Using n_components={n_components} instead.")
+            logging.info(f"Reducing embedding dimension from {current_dim} to {n_components} using PCA")
             pca_params = pca_config or {}
-            # Create and fit PCA model
             global _pca_model
             _pca_model = PCA(
-                n_components=target_dim,
+                n_components=n_components,
                 random_state=pca_params.get('random_state', 42),
                 whiten=pca_params.get('whiten', False)
             )
             embeddings = _pca_model.fit_transform(embeddings)
-            
             # Save PCA model for later use with queries
-            pca_file = f'pca_model_{target_dim}d.joblib'
+            pca_file = f'pca_model_{n_components}d.joblib'
             joblib.dump(_pca_model, pca_file)
             logging.info(f"Saved PCA model to {pca_file}")
-            
             # Always normalize after PCA to ensure consistent magnitudes
             embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+            # Update target_dim for final check
+            target_dim = n_components
         else:
             raise ValueError(
                 f"Dimension mismatch: Model {model_name} produced {current_dim}-d vectors, "
                 f"but target dimension is {target_dim}. Enable PCA reduction or use matching dimensions."
             )
-    
-    # Validate final dimensions
+    # Validate final dimensions (allow for auto-adjusted target_dim)
     if embeddings.shape[1] != target_dim:
         raise ValueError(
             f"Final embedding dimension ({embeddings.shape[1]}) does not match target ({target_dim}). "

@@ -7,7 +7,14 @@ from qdrant_client.models import (
     PointStruct, 
     Distance, 
     VectorParams,
-    CollectionStatus
+    CollectionStatus,
+    SearchRequest,
+    Filter,
+    FieldCondition,
+    Range,
+    MatchValue,
+    OptimizersConfigDiff,
+    HnswConfigDiff
 )
 
 # Milvus and Qdrant support
@@ -149,24 +156,49 @@ def insert_embeddings_qdrant(
                 else:
                     sanitized_payload[k] = str(v)
             
+            # Debug output for each point
+            logging.debug(f"\nEmbedding ID: {idx}")
+            logging.debug(f"Vector dimension: {len(vector)}")
+            logging.debug(f"Payload: {sanitized_payload}")
+            
             point = PointStruct(
                 id=idx,
                 vector=vector,
                 payload=sanitized_payload
             )
             points.append(point)
+            
+            # Print embedding details once at the start
+            if idx == 0:
+                logging.info("\n=== Embedding Structure Example ===")
+                logging.info(f"Vector dimension: {len(vector)}")
+                logging.info("Payload structure:")
+                for key in sanitized_payload.keys():
+                    logging.info(f"- {key}")
+                logging.info("=" * 50)
+            
+            # Print concise embedding info
+            logging.info(f"[{idx}] ID: {idx}, "
+                        f"Text: {sanitized_payload.get('text', '')[:50]}{'...' if len(sanitized_payload.get('text', '')) > 50 else ''}, "
+                        f"Metadata: {', '.join([f'{k}={v}' for k, v in sanitized_payload.items() if k != 'text'])}")
         
         # Insert in batches with progress bar
         total_batches = (len(points) + batch_size - 1) // batch_size
         for i in range(0, len(points), batch_size):
             batch = points[i:i + batch_size]
             try:
+                # Print batch details
+                logging.info(f"\n--- Batch {i//batch_size + 1}/{total_batches} ---")
+                logging.info(f"Size: {len(batch)} points | ID range: {batch[0].id} to {batch[-1].id}")
+                
                 client.upsert(
                     collection_name=collection_name,
                     points=batch,
                     wait=True  # Wait for operation to complete
                 )
-                logging.info(f"Inserted batch {i//batch_size + 1}/{total_batches}")
+                
+                # Log batch metrics
+                logging.info(f"Status: Successfully inserted {len(batch)} points")
             except Exception as e:
                 logging.error(f"Error inserting batch {i//batch_size + 1}: {str(e)}")
                 raise
@@ -189,55 +221,71 @@ def setup_qdrant_indexing(
     vector_index_cfg: Dict,
     payload_index_cfg: List[Dict]
 ) -> None:
-    """
-    Configure Qdrant indexing settings
-    
-    Args:
-        client: QdrantClient instance
-        collection_name: Name of the collection
-        vector_index_cfg: Vector index configuration
-        payload_index_cfg: Payload index configuration
-    """
+
     try:
-        # Update collection settings
-        if vector_index_cfg:
-            index_type = vector_index_cfg.get('type', 'hnsw')
-            index_params = vector_index_cfg.get('params', {})
+        # Configure vector index
+        index_type = vector_index_cfg.get('type', 'hnsw').lower()
+        if index_type == 'hnsw':
+            params = vector_index_cfg.get('params', {})
             
-            hnsw_config = None
-            if index_type == 'hnsw':
-                hnsw_config = {
-                    k: v for k, v in index_params.items() 
-                    if k in ['m', 'ef_construct']
-                }
+            # Update HNSW config
+            optimizer_config = OptimizersConfigDiff(
+                indexing_threshold=20000,
+                memmap_threshold=20000,
+            )
             
+            hnsw_config = HnswConfigDiff(
+                m=params.get('m', 16),
+                ef_construct=params.get('ef_construct', 256),
+            )
+            
+            # Update collection with new configuration
             client.update_collection(
                 collection_name=collection_name,
-                optimizer_config={"default_segment_number": 2},
+                optimizers_config=optimizer_config,
                 hnsw_config=hnsw_config
             )
-            logging.info(f"Updated collection indexing settings: {collection_name}")
-
-        # Create payload indices
+            
+            # Note: Qdrant's update_collection does not accept 'params'.
+            # If you want to set search parameters like 'hnsw_ef', you must do it at query time, not as a collection config.
+            
+            # Configure quantization if enabled (Qdrant expects a specific structure)
+            quant_cfg = vector_index_cfg.get('quantization', {})
+            if quant_cfg.get('enabled', False):
+                from qdrant_client.models import ScalarQuantization
+                scalar_quant = ScalarQuantization(
+                    scalar={
+                        "type": "int8",
+                        "always_ram": quant_cfg.get('always_ram', True)
+                    }
+                )
+                client.update_collection(
+                    collection_name=collection_name,
+                    quantization_config=scalar_quant
+                )
+        
+        # Configure payload indexes
+        supported_types = {'keyword', 'integer', 'float', 'geo', 'text', 'bool', 'datetime', 'uuid'}
         for field_cfg in payload_index_cfg:
-            field = field_cfg.get('field')
-            idx_type = field_cfg.get('type')
-            if field and idx_type:
-                try:
-                    client.create_payload_index(
-                        collection_name=collection_name,
-                        field_name=field,
-                        field_schema=idx_type
-                    )
-                    logging.info(f"Created payload index for field: {field}")
-                except Exception as e:
-                    logging.warning(f"Failed to create payload index for {field}: {str(e)}")
-
+            field_name = field_cfg['field']
+            field_type = field_cfg['type']
+            if field_type not in supported_types:
+                logging.warning(f"[Qdrant] Skipping unsupported payload index type: {field_type} for field {field_name}")
+                continue
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=field_type
+            )
+                    
+        logging.info(f"Successfully configured indexes for collection {collection_name}")
+        
     except Exception as e:
-        logging.error(f"Error setting up Qdrant indexing: {str(e)}")
+        logging.error(f"Error configuring indexes: {str(e)}")
         raise
 
-def insert_vectors(collection, embeddings, texts, payloads, batch_size=100):
+
+def insert_vectors(collection, embeddings, texts, payloads, batch_size=100) -> Dict[str, float]:
     """
     Insert vectors into the collection with their corresponding payloads.
     
@@ -247,22 +295,83 @@ def insert_vectors(collection, embeddings, texts, payloads, batch_size=100):
         texts: List of original texts
         payloads: List of payload dictionaries containing original column values
         batch_size: Size of batches for insertion
+        
+    Returns:
+        Dictionary containing insertion metrics
     """
+    start_time = time.time()
     total_vectors = len(embeddings)
+    metrics = {}
     
-    for i in range(0, total_vectors, batch_size):
-        batch_end = min(i + batch_size, total_vectors)
+    try:
+        # Log start of insertion
+        logging.info(f"Starting insertion of {total_vectors} vectors in batches of {batch_size}")
         
-        entities = [
-            {
-                "id": str(j),
-                "vector": embeddings[j],
-                "payload": {
-                    "text": texts[j],
-                    **payloads[j]  # Unpack all original columns into payload
+        # Calculate total batches for progress tracking
+        total_batches = (total_vectors + batch_size - 1) // batch_size
+        
+        for batch_num, i in enumerate(range(0, total_vectors, batch_size), 1):
+            batch_start_time = time.time()
+            batch_end = min(i + batch_size, total_vectors)
+            
+            # Create batch with proper ID generation and payload handling
+            entities = []
+            for j in range(i, batch_end):
+                # Convert numpy array to list if necessary
+                vector = embeddings[j].tolist() if hasattr(embeddings[j], 'tolist') else embeddings[j]
+                
+                # Ensure payload values are of supported types
+                sanitized_payload = {"text": str(texts[j])}
+                if payloads and j < len(payloads):
+                    for k, v in payloads[j].items():
+                        if isinstance(v, (int, float, str, bool)):
+                            sanitized_payload[k] = v
+                        else:
+                            sanitized_payload[k] = str(v)
+                
+                entity = {
+                    "id": str(j),
+                    "vector": vector,
+                    "payload": sanitized_payload
                 }
-            }
-            for j in range(i, batch_end)
-        ]
+                entities.append(entity)
+                
+                # Debug output for every 100th vector
+                if j % 100 == 0:
+                    logging.debug(f"\n=== Vector {j} Details ===")
+                    logging.debug(f"ID: {j}")
+                    logging.debug(f"Vector dimension: {len(vector)}")
+                    logging.debug(f"Payload keys: {list(sanitized_payload.keys())}")
+            
+            try:
+                # Insert batch with progress logging
+                logging.info(f"Inserting batch {batch_num}/{total_batches} "
+                           f"(vectors {i} to {batch_end-1})")
+                collection.insert(entities)
+                
+                batch_time = time.time() - batch_start_time
+                logging.info(f"Batch {batch_num} inserted in {batch_time:.2f}s "
+                           f"({len(entities)/batch_time:.1f} vectors/s)")
+                
+            except Exception as e:
+                logging.error(f"Error inserting batch {batch_num}: {str(e)}")
+                raise
         
-        collection.insert(entities)
+        # Calculate and return metrics
+        insertion_time = time.time() - start_time
+        metrics = {
+            'insertion_time': insertion_time,
+            'total_vectors': total_vectors,
+            'insert_rate': total_vectors / insertion_time if insertion_time > 0 else 0,
+            'batch_size': batch_size
+        }
+        
+        logging.info(f"Insertion completed: {metrics['total_vectors']} vectors "
+                    f"in {metrics['insertion_time']:.2f}s "
+                    f"({metrics['insert_rate']:.1f} vectors/s)")
+        
+        return metrics
+        
+    except Exception as e:
+        logging.error(f"Error in vector insertion: {str(e)}")
+        raise

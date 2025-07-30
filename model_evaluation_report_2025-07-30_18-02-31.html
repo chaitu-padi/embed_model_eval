@@ -56,8 +56,10 @@
         }
         .module-header {
             background-color: #2c3e50;
-            color: white;
+            color: #f8f9fa;
             font-weight: bold;
+            font-size: 1.1em;
+            padding: 8px 12px;
         }
         .metric-value {
             font-family: 'Courier New', Courier, monospace;
@@ -105,7 +107,7 @@
     <body>
     <div class="report">
         <h2>Embedding Model Evaluation Report</h2>
-        <div class="timestamp">Generated: 2025-07-24 19:51:19.743024</div>
+        <div class="timestamp">Generated: 2025-07-30 18:02:31.372030</div>
         
         <div class="nav-section">
             <ul>
@@ -125,9 +127,6 @@
             <th style="width: 30%;">Parameter</th>
             <th>Value</th>
         </tr>
-        <tr class="module-header">
-            <td colspan="2">System Specifications</td>
-        </tr>
         <tr>
             <td>CPU Model</td>
             <td class="metric-value">Intel64 Family 6 Model 58 Stepping 9, GenuineIntel</td>
@@ -139,9 +138,6 @@
         <tr>
             <td>Total RAM (GB)</td>
             <td class="metric-value">11.86</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="2">GPU Information</td>
         </tr>
         <tr>
             <td>GPU Device</td>
@@ -172,39 +168,33 @@
             <th style="width: 30%;">Parameter</th>
             <th>Value</th>
         </tr>
-        <tr class="module-header">
-            <td colspan="2">Data Source Information</td>
-        </tr>
         <tr>
             <td>Dataset Source</td>
-            <td class="metric-value">split_0_25MB.csv</td>
+            <td class="metric-value">jesc*.pdf</td>
         </tr>
         <tr>
             <td>Dataset Size</td>
-            <td class="metric-value">0.28 MB</td>
+            <td class="metric-value">N/A</td>
         </tr>
         <tr>
             <td>Source Type</td>
-            <td class="metric-value">csv</td>
+            <td class="metric-value">pdf</td>
         </tr>
         <tr>
             <td>Total Records</td>
             <td class="metric-value">N/A</td>
         </tr>
-        <tr class="module-header">
-            <td colspan="2">Data Processing</td>
-        </tr>
         <tr>
             <td>Chunk Strategy</td>
-            <td class="metric-value">none</td>
+            <td class="metric-value">sentence</td>
         </tr>
         <tr>
             <td>Chunk Size</td>
-            <td class="metric-value">128</td>
+            <td class="metric-value">1000</td>
         </tr>
         <tr>
             <td>Overlap</td>
-            <td class="metric-value">0</td>
+            <td class="metric-value">100</td>
         </tr>
     </table>
 
@@ -213,10 +203,7 @@
     <table>
         <tr>
             <th style="width: 30%;">Parameter</th>
-            <th>all-mpnet-base-v2</th> <th>all-MiniLM-L6-v2</th>
-        </tr>
-        <tr class="module-header">
-            <td colspan="3">Model Information</td>
+            <th>all-MiniLM-L6-v2</th> <th>paraphrase-distilroberta-base-v1</th>
         </tr>
         <tr>
             <td>Model Type</td>
@@ -237,9 +224,6 @@
         <tr>
             <td>Normalize Embeddings</td>
             <td class="metric-value">True</td> <td class="metric-value">True</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="3">Processing Parameters</td>
         </tr>
         <tr>
             <td>Embedding Batch Size</td>
@@ -262,23 +246,20 @@
         </tr>
         <tr>
             <td>Memory Usage (MB)</td>
-            <td class="metric-value">N/A</td> <td class="metric-value">N/A</td>
+            <td class="metric-value">2.40234375</td> <td class="metric-value">7.78515625</td>
         </tr>
         <tr>
             <td>Loading Time (s)</td>
-            <td class="metric-value">N/A</td> <td class="metric-value">N/A</td>
+            <td class="metric-value">3.8459272384643555</td> <td class="metric-value">141.4484100341797</td>
         </tr>
     </table>
 
-    <!-- 4. Vector Database Configuration -->
-    <h3 id="vectordb">4. Vector Database Configuration</h3>
+    <!-- 4. Vector Database Configurations -->
+    <h3 id="vectordb">4. Vector Database Configurations</h3>
     <table>
         <tr>
             <th style="width: 30%;">Parameter</th>
             <th>Value</th>
-        </tr>
-        <tr class="module-header">
-            <td colspan="2">Database Connection</td>
         </tr>
         <tr>
             <td>Database Type</td>
@@ -290,10 +271,7 @@
         </tr>
         <tr>
             <td>Collection</td>
-            <td class="metric-value">flight_embeddings_all_mpnet_base_v2_384d_all_MiniLM_L6_v2_384d</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="2">Insertion Configuration</td>
+            <td class="metric-value">science_embeddings</td>
         </tr>
         <tr>
             <td>Insertion Batch Size</td>
@@ -311,14 +289,6 @@
             <td>Vector Distance</td>
             <td class="metric-value">COSINE</td>
         </tr>
-    </table>
-    <!-- 5. Vector Database Retrieval Configuration -->
-    <h3>5. Vector Database Retrieval Configuration</h3>
-    <table>
-        <tr>
-            <th style="width: 30%;">Parameter</th>
-            <th>Value</th>
-        </tr>
         <tr class="module-header">
             <td colspan="2">Search Configuration</td>
         </tr>
@@ -328,7 +298,7 @@
         </tr>
         <tr>
             <td>Top-K Results</td>
-            <td class="metric-value">5</td>
+            <td class="metric-value">10</td>
         </tr>
         <tr>
             <td>Distance Metric</td>
@@ -339,11 +309,11 @@
         </tr>
         <tr>
             <td>Semantic Query</td>
-            <td class="metric-value">Find flights,which origin from IND on date April 1st 2022 which are delayed for longer time</td>
+            <td class="metric-value">what is right thumb rule ? explain it</td>
         </tr>
         <tr>
             <td>Filter Applied</td>
-            <td class="metric-value">True</td>
+            <td class="metric-value">False</td>
         </tr>
     </table>
 
@@ -352,71 +322,65 @@
     <table>
         <tr>
             <th style="width: 30%;">Metric</th>
-            <th>all-mpnet-base-v2</th> <th>all-MiniLM-L6-v2</th>
-        </tr>
-        <tr class="module-header">
-            <td colspan="3">Pipeline Timing Analysis</td>
+            <th>all-MiniLM-L6-v2</th> <th>paraphrase-distilroberta-base-v1</th>
         </tr>
         <tr>
             <td>Data Loading Phase</td>
-            <td class="metric-value">0.40 seconds</td> <td class="metric-value">0.65 seconds</td>
+            <td class="metric-value">1305.45 seconds</td> <td class="metric-value">1775.94 seconds</td>
         </tr>
         <tr>
             <td>Embedding Generation Phase</td>
-            <td class="metric-value">600.92 seconds</td> <td class="metric-value">95.22 seconds</td>
+            <td class="metric-value">294.34 seconds</td> <td class="metric-value">550.98 seconds</td>
         </tr>
         <tr>
             <td>Database Insertion Phase</td>
-            <td class="metric-value">5.16 seconds</td> <td class="metric-value">2.95 seconds</td>
+            <td class="metric-value">14.24 seconds</td> <td class="metric-value">19.34 seconds</td>
         </tr>
         <tr>
             <td>Semantic Retrieval Phase</td>
-            <td class="metric-value">5.06 seconds</td> <td class="metric-value">0.00 seconds</td>
+            <td class="metric-value">7.50 seconds</td> <td class="metric-value">16.06 seconds</td>
         </tr>
         <tr>
             <td>Total Pipeline Time</td>
-            <td class="metric-value">611.55 seconds</td> <td class="metric-value">98.83 seconds</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="3">Performance Metrics</td>
+            <td class="metric-value">1621.53 seconds</td> <td class="metric-value">2362.33 seconds</td>
         </tr>
         <tr>
             <td>Processing Rate</td>
-            <td class="metric-value">1979.62 records/second</td> <td class="metric-value">1202.63 records/second</td>
+            <td class="metric-value">0.42 records/second</td> <td class="metric-value">0.31 records/second</td>
         </tr>
         <tr>
             <td>Embedding Generation Rate</td>
-            <td class="metric-value">1.31 embeddings/second</td> <td class="metric-value">8.26 embeddings/second</td>
+            <td class="metric-value">1.88 embeddings/second</td> <td class="metric-value">1.00 embeddings/second</td>
         </tr>
         <tr class="module-header">
             <td colspan="3">Resource Usage</td>
         </tr>
         <tr>
             <td>Memory Peak</td>
-            <td class="metric-value">N/A MB</td> <td class="metric-value">N/A MB</td>
+            <td class="metric-value">4659.80 MB</td> <td class="metric-value">4659.80 MB</td>
         </tr>
         <tr>
             <td>Total Embeddings</td>
-            <td class="metric-value">787</td> <td class="metric-value">787</td>
+            <td class="metric-value">0</td> <td class="metric-value">0</td>
         </tr>
         <tr>
             <td>GPU Memory Used</td>
-            <td class="metric-value">N/A GB</td> <td class="metric-value">N/A GB</td>
+            <td class="metric-value">N/A (CPU)</td> <td class="metric-value">N/A (CPU)</td>
         </tr>
         <tr>
             <td>GPU Utilization</td>
-            <td class="metric-value">N/A%</td> <td class="metric-value">N/A%</td>
+            <td class="metric-value">N/A (CPU)</td> <td class="metric-value">N/A (CPU)</td>
         </tr>
         <tr class="module-header">
             <td colspan="3">Vector Database Metrics</td>
         </tr>
         <tr>
             <td>Index Build Time</td>
-            <td class="metric-value">N/A seconds</td> <td class="metric-value">N/A seconds</td>
+            <td class="metric-value">0.8080782890319824 seconds</td> <td class="metric-value">1.4673504829406738 seconds</td>
         </tr>
         <tr>
             <td>Insert Rate</td>
-            <td class="metric-value">N/A vectors/second</td> <td class="metric-value">N/A vectors/second</td>
+            <td class="metric-value">38.83427873967958 vectors/second</td> <td class="metric-value">28.589210176592307 vectors/second</td>
         </tr>
         <tr>
             <td>Average Query Time</td>
@@ -427,19 +391,19 @@
             <td class="metric-value">N/A queries/second</td> <td class="metric-value">N/A queries/second</td>
         </tr>
         <tr class="module-header">
-            <td colspan="3">Quality Metrics</td>
+            <td colspan="3"><div style="color: #f8f9fa;">Quality Metrics</div></td>
         </tr>
         <tr>
             <td>Accuracy</td>
             <td class="metric-value">0.000</td> <td class="metric-value">0.000</td>
         </tr>
         <tr>
-            <td>Recall@5</td>
-            <td class="metric-value">1.000</td> <td class="metric-value">0.000</td>
+            <td>Recall@10</td>
+            <td class="metric-value">1.000</td> <td class="metric-value">1.000</td>
         </tr>
         <tr>
-            <td>Precision@5</td>
-            <td class="metric-value">1.000</td> <td class="metric-value">0.000</td>
+            <td>Precision@10</td>
+            <td class="metric-value">1.000</td> <td class="metric-value">1.000</td>
         </tr>
         <tr>
             <td>F1 Score</td>
@@ -451,59 +415,37 @@
         </tr>
     </table>
     
-    <!-- Execution Summary -->
-    <h3>Execution Summary</h3>
+
+    <!-- Model Comparison and Ranking -->
+    <h3>Model Comparison and Ranking</h3>
     <table>
         <tr>
-            <th style="width: 30%;">Category</th>
-            <th>Performance Summary</th>
+            <th style="width: 30%;">Rank</th>
+            <th>Model</th>
+            <th>Overall Score</th>
+            <th>Key Strengths</th>
+            <th>Areas for Consideration</th>
         </tr>
-        <tr class="module-header">
-            <td colspan="2">Resource Utilization</td>
-        </tr>
+        
         <tr>
-            <td>CPU Usage</td>
-            <td class="metric-value">Peak: N/A%, Average: N/A%</td>
+            <td class="metric-value">1</td>
+            <td class="metric-value">all-MiniLM-L6-v2</td>
+            <td class="metric-value">24.6</td>
+            <td class="metric-value">Standard performance</td>
+            <td class="metric-value">Lower semantic accuracy (F1=0.00). Consider fine-tuning or using a domain-specific model, Slower embedding generation (2 embeddings/sec). Consider batch size optimization or hardware acceleration, Slower retrieval times (7.50s). Consider index optimization or hardware upgrades</td>
         </tr>
+        
+
         <tr>
-            <td>Memory Usage</td>
-            <td class="metric-value">Peak: N/A MB, Average: N/A MB</td>
+            <td class="metric-value">2</td>
+            <td class="metric-value">paraphrase-distilroberta-base-v1</td>
+            <td class="metric-value">24.3</td>
+            <td class="metric-value">Standard performance</td>
+            <td class="metric-value">Lower semantic accuracy (F1=0.00). Consider fine-tuning or using a domain-specific model, Slower embedding generation (1 embeddings/sec). Consider batch size optimization or hardware acceleration, Slower retrieval times (16.06s). Consider index optimization or hardware upgrades</td>
         </tr>
-        <tr>
-            <td>GPU Resources</td>
-            <td class="metric-value">Memory Used: N/A GB, Utilization: N/A%</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="2">Processing Pipeline</td>
-        </tr>
-        <tr>
-            <td>Data Processing</td>
-            <td class="metric-value">Processed N/A records at 1979.62 records/second</td>
-        </tr>
-        <tr>
-            <td>Embedding Generation</td>
-            <td class="metric-value">Generated 787 embeddings at 1.31 embeddings/second (Batch Size: 256)</td>
-        </tr>
-        <tr>
-            <td>Database Operations</td>
-            <td class="metric-value">Indexed and inserted 787 vectors into qdrant collection 'flight_embeddings_all_mpnet_base_v2_384d_all_MiniLM_L6_v2_384d' (Batch Size: 300)</td>
-        </tr>
-        <tr class="module-header">
-            <td colspan="2">Overall Performance</td>
-        </tr>
-        <tr>
-            <td>Quality Metrics</td>
-            <td class="metric-value">Achieved Precision@5: 1.000, Recall@5: 1.000, F1: 0.000</td>
-        </tr>
-        <tr>
-            <td>Time Distribution</td>
-            <td class="metric-value">Processing: 0.3975512981414795s, Embedding: 600.9242618083954s, Database: 5.162801742553711s</td>
-        </tr>
-        <tr>
-            <td>Final Assessment</td>
-            <td class="metric-value">Successfully processed and indexed dataset with 787 embeddings, achieving 0.000 F1-score</td>
-        </tr>
+        
     </table>
+    
     </div>
     </body>
     </html>

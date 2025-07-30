@@ -29,13 +29,33 @@ def evaluate(retrieved_ids, relevant_ids, top_k):
     # Calculate true positives (correctly retrieved items)
     true_positives = len(retrieved_set & relevant_set)
     
+    # Calculate all true/false positives/negatives
+    true_positives = len(retrieved_set & relevant_set)
+    false_positives = len(retrieved_set - relevant_set)
+    false_negatives = len(relevant_set - retrieved_set)
+    # For accuracy, we also need true negatives (correctly not retrieved irrelevant items)
+    # In our case, true_negatives would be (total_possible_items - tp - fp - fn)
+    # But since we don't have total_possible_items, we'll use a modified accuracy
+    
     # Calculate metrics
     precision = true_positives / len(retrieved_set) if retrieved_set else 0.0
     recall = true_positives / len(relevant_set) if relevant_set else 0.0
-    accuracy = true_positives / top_k if top_k > 0 else 0.0
+    
+    # Modified accuracy calculation considering both precision and recall
+    # This gives us a balanced measure of both correct retrievals and correct exclusions
+    accuracy = (true_positives) / (true_positives + false_positives + false_negatives) if (true_positives + false_positives + false_negatives) > 0 else 0.0
     
     # Calculate F1 score
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    
+    print(f"[Evaluation][Debug] Metrics calculation details:")
+    print(f"True Positives: {true_positives}")
+    print(f"False Positives: {false_positives}")
+    print(f"False Negatives: {false_negatives}")
+    print(f"Precision: {precision:.3f}")
+    print(f"Recall: {recall:.3f}")
+    print(f"Accuracy: {accuracy:.3f}")
+    print(f"F1 Score: {f1:.3f}")
     return {
         'accuracy': accuracy,
         'recall': recall,

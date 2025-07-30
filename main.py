@@ -101,6 +101,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         if 'use_pca' not in emb_cfg:
             raise ValueError("use_pca must be specified in embed_config")
             
+
         embeddings, model_metrics = generate_embeddings(
             texts=texts,
             model_name=emb_cfg['model'],
@@ -116,16 +117,28 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                     f"Memory usage: {model_metrics['model_memory_mb']:.2f}MB, "
                     f"GPU memory: {model_metrics['gpu_memory_used']:.2f}GB")
 
-        # 3. Insert into vector database
-        logging.info("[Step 3 start] Vector Database Insertion...")
+
+        # Use actual embedding dimension for DB operations and store it
+        actual_vector_size = embeddings.shape[1]
+        # Store the actual dimension in config for retrieval
+        emb_cfg['actual_dimension'] = actual_vector_size
+        logging.info(f"Actual vector dimension after processing: {actual_vector_size}")
+        
+        if actual_vector_size != emb_cfg.get('dimension', 384):
+            logging.info(f"Note: Final dimension ({actual_vector_size}) differs from target ({emb_cfg.get('dimension', 384)})")
+            if use_pca:
+                logging.info("This is due to PCA auto-adjustment based on data characteristics")
+
+        # 3. Insert into vector database (insert_embeddings_qdrant will ensure collection exists with correct dimension)
         from vector_databases.insertion import insert_embeddings_qdrant, setup_qdrant_indexing
+        logging.info("[Step 3 start] Vector Database Insertion...")
         t2 = time.time()
         db_client, db_metrics = insert_embeddings_qdrant(
             embeddings,
             texts,
             payloads,
             collection_name=vdb_cfg.get('collection', 'embeddings'),
-            vector_size=emb_cfg.get('dimension', 384),
+            vector_size=actual_vector_size,
             host=vdb_cfg.get('host', 'localhost'),
             port=int(vdb_cfg.get('port', 6333)),
             batch_size=int(vdb_cfg.get('batch_size', 100))
@@ -168,39 +181,85 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 embed_model = model
             else:
                 from sentence_transformers import SentenceTransformer
-                from embeddings.generator import generate_embeddings  # Import generator for PCA
+                from embeddings.generator import generate_embeddings, get_model_dimension  # Import generator for PCA
                 emb_cfg = config['embed_config']
-                embed_model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
+                model_name = emb_cfg.get('model', 'all-MiniLM-L6-v2')
+                embed_model = SentenceTransformer(model_name)
                 
-                # Configure embedding generation to match collection dimension
+                # Get model's output dimension and configure PCA
+                model_output_dim = get_model_dimension(model_name)
                 target_dim = emb_cfg.get('dimension', 384)
                 use_pca = emb_cfg.get('use_pca', False)
+                
+                # Check actual dimension from vector DB collection
+                try:
+                    collection_info = db_client.get_collection(collection_name)
+                    actual_dim = collection_info.config.params.vectors.size
+                    logging.info(f"Collection vector size: {actual_dim}")
+                except Exception as e:
+                    logging.warning(f"Could not get collection dimension: {e}")
+                    # Fall back to target dimension from config
+                    actual_dim = target_dim
+                    logging.info(f"Using target dimension from config: {actual_dim}")
+                
+                # Only use PCA if we need dimension reduction and dimensions don't match
+                if model_output_dim == actual_dim:
+                    use_pca = False
+                    logging.info(f"Model output dimension ({model_output_dim}) matches collection dimension. Skipping PCA.")
+                
+                logging.info(f"Model dimension: {model_output_dim}, Collection dimension: {actual_dim}, Use PCA: {use_pca}")
+                
+                # Load PCA model if needed
+                pca = None
                 pca_config = emb_cfg.get('pca_config', {})
+                if use_pca:
+                    logging.info(f"PCA config: {pca_config}")
+                    from embeddings.generator import load_pca_model
+                    # Use actual_dim from collection instead of target_dim
+                    pca = load_pca_model(actual_dim, pca_config)
+                    if pca is not None:
+                        logging.info(f"Loaded PCA model expects input dimension: {pca.n_features_in_} and outputs: {pca.n_components_}")
+                    else:
+                        logging.error(f"Required PCA model for dimension {actual_dim} not found. Cannot proceed with retrieval.")
+                        raise ValueError(f"PCA model not found for dimension {actual_dim}")
                 
             if semantic_query:
                 logging.info(f"[Step 5] Performing semantic search: {semantic_query}")
                 # Generate query embedding with proper dimension
                 if not debug_retrieval_only:
-                    # Get the model's output dimension
-                    from embeddings.generator import get_model_dimension
-                    model_dim = get_model_dimension(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
-                    
-                    # For single query, get the base model output first
+                    # Generate query embedding with proper dimension
                     query_embedding = embed_model.encode(
                         [semantic_query],
                         normalize_embeddings=False,  # Don't normalize yet
                         convert_to_numpy=True
-                    )[0]
+                    )
                     
-                    # If PCA was used and dimensions don't match target
-                    if use_pca and model_dim != target_dim:
-                        from embeddings.generator import load_pca_model
-                        pca = load_pca_model(target_dim, pca_config)
-                        if pca is not None:
-                            # Transform the query embedding using the same PCA model
-                            query_embedding = pca.transform([query_embedding])[0]
-                        else:
-                            logging.warning(f"PCA model not found for dimension {target_dim}. Using original embedding.")
+                    logging.info(f"Initial query embedding shape: {query_embedding.shape}")
+                    
+                    # Ensure query_embedding is 2D and has right shape
+                    if len(query_embedding.shape) == 3:
+                        query_embedding = query_embedding.reshape(query_embedding.shape[0], -1)
+                    elif len(query_embedding.shape) == 1:
+                        query_embedding = query_embedding.reshape(1, -1)
+                    
+                    logging.info(f"Query embedding shape: {query_embedding.shape}")
+                    
+                    # Only apply PCA if needed (dimensions don't match and PCA is enabled)
+                    if use_pca and pca is not None:
+                        if query_embedding.shape[-1] != pca.n_features_in_:
+                            logging.error(f"Model output dimension ({query_embedding.shape[-1]}) doesn't match "
+                                      f"PCA input dimension ({pca.n_features_in_})")
+                            raise ValueError("Model output dimension doesn't match PCA input dimension. "
+                                          "Make sure you're using the same model that was used for training.")
+                            
+                        # Transform the query embedding using PCA
+                        query_embedding = pca.transform(query_embedding)
+                        # Take first embedding since we only have one query
+                        query_embedding = query_embedding[0]
+                        logging.info(f"Query embedding shape after PCA: {query_embedding.shape}")
+                    else:
+                        # If not using PCA, just take the first embedding
+                        query_embedding = query_embedding[0]
                     
                     # Apply normalization after all dimension adjustments
                     if emb_cfg.get('normalize', True):

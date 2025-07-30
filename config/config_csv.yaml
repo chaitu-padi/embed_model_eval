@@ -1,9 +1,13 @@
-# Configuration file for embedding model evaluation
+# Comprehensive configuration for embedding evaluation
+
+#debug retreival
+debug_retrieval_only: false
+
 
 # 1. Data Source Configuration
 data_source:
   type: pdf                                      # str: 'csv', 'oracle', 'json', 'txt', 'pdf'
-  file: 'data/pdf_files/jesc*.pdf'                      # Path to the PDF file
+  file: 'data/jesc112.pdf'                      # Path to the PDF file
   # PDF-specific settings
   pdf_config:
     extract_tables: true                        # Whether to extract tables from PDF
@@ -22,7 +26,7 @@ data_source:
 
 # 2. Embedding Parameters
 embed_config:
-  models: ["all-MiniLM-L6-v2", "paraphrase-distilroberta-base-v1"] #, "all-mpnet-base-v2" ] # List of models to evaluate 
+  models: ["all-MiniLM-L6-v2"] #, "paraphrase-distilroberta-base-v1" ] # List of models to evaluate 
   default_model: "all-MiniLM-L6-v2"                  # Default model for single-model operations
   batch_size: 256                                    # Increased batch size
   normalize: true
@@ -45,19 +49,19 @@ embed_config:
 
 # 3. Chunking Parameters
 chunking:
-  strategy: sentence             # str: 'none', 'sentence', 'sliding_window', 'fixed_length', 'paragraph'
+  strategy: none              # str: 'none', 'sentence', 'sliding_window', 'fixed_length', 'paragraph'
   chunk_size: 1000               # int: Size of chunks (characters for fixed/sliding, target size for sentence/paragraph)
   overlap: 100                   # int: Overlap size for sliding window strategy
-  delimiter: "\n\n"              # str: Delimiter for paragraph chunking
-  combine_small_chunks: true     # bool: Whether to combine small chunks
-  min_chunk_size: 100            # int: Minimum chunk size when combining
+  delimiter: "\n\n"             # str: Delimiter for paragraph chunking
+  combine_small_chunks: true    # bool: Whether to combine small chunks
+  min_chunk_size: 100          # int: Minimum chunk size when combining
   sentence_options:
-    language: english            # str: Language for sentence tokenization
-    respect_breaks: true         # bool: Whether to respect line breaks
+    language: english          # str: Language for sentence tokenization
+    respect_breaks: true      # bool: Whether to respect line breaks
   advanced:
     normalize_whitespace: true   # bool: Clean up excessive whitespace
     preserve_line_breaks: false  # bool: Keep original line breaks in output
-    smart_splitting: true        # bool: Try to split at semantic boundaries
+    smart_splitting: true       # bool: Try to split at semantic boundaries
 
 # 4. Vector Database Connection Details
 vector_db:
@@ -69,45 +73,18 @@ vector_db:
   upsert_retries: 3               # int: number of retries for Qdrant upsert (default: 3)
   upsert_retry_delay: 2           # int: delay (seconds) between retries (default: 2)
   # Indexing configuration for Qdrant
-
   vector_index:
-    type: hnsw                    # str: 'plain', 'hnsw', 'ivf'
+    type: hnsw                    # str: 'plain', 'hnsw', 'ivf', etc.
     params:
-      m: 16                       # Number of edges per node in the index graph
-      ef_construct: 256           # Size of the dynamic candidate list for construction
-      ef_runtime: 128             # Size of the dynamic candidate list at search time
-      full_scan_threshold: 10000  # Number of vectors to trigger full scan optimization
-    quantization:
-      enabled: true              # Whether to enable scalar quantization
-      always_ram: true           # Keep quantized vectors in RAM
-      quantum: 0.01              # Quantization step
+      m: 16                       # int: HNSW parameter (example)
+      ef_construct: 256           # int: HNSW parameter (example)
   payload_index:
-    - field: page_number         # For PDF documents
-      type: integer
-    - field: chunk_index
-      type: integer
-    - field: total_chunks
-      type: integer
-    - field: chunk_size
-      type: integer
-    - field: chunking_strategy
+    - field: Origin
       type: keyword
-    - field: content_type       # Type of content (text, table, etc.)
-      type: keyword
-    - field: metadata           # For document metadata
-      type: object
-      schema:
-        title: keyword
-        author: keyword
-        date: date
-        timeeval_only: false  
-  #payload_index:
-  #  - field: Origin
-  #    type: keyword
-  #  - field: FlightDate
-  #    type: datetime
-  #  - field: DepDelayMinutes
-  #    type: float 
+    - field: FlightDate
+      type: datetime
+    - field: DepDelayMinutes
+      type: float 
               
  
 # 5. Retrieval & Evaluation Parameters
@@ -122,14 +99,14 @@ retrieval:
   semantic_query: "what is right thumb rule ? explain it" #"Find flights departing from Indianapolis International Airport (IND) on April 1st 2022 which experienced departure delays" # More specific query
   rerank_results: true          # Enable reranking for better relevance
   diversity_weight: 0.2         # Lowered to prioritize relevancerameter are shown in comments
-  #payload_filter:
-  #  must:
-  #    - key: "Origin"
-  #      match:
-  #        value: "IND"
-  #    - key: "FlightDate"
-  #      match:
-  #        value: "2022-04-01"
+  payload_filter:
+    must:
+      - key: "Origin"
+        match:
+          value: "IND"
+      - key: "FlightDate"
+        match:
+          value: "2022-04-01"
   #    - key: "DepDelayMinutes"
   #      range:
   #        gte: 37
@@ -145,9 +122,7 @@ retrieval:
       #lte: "2022-04-01"
 
 evaluation:
-  relevant_ids: [531] #[3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
+  relevant_ids: [609,631,701,709] #[3294,1488,3297,3290,1418]       # list[int]: ground truth relevant ids
   metrics: [accuracy, recall, precision, f1]     # list[str]: metrics to compute
 
-
-#debug retreival
-debug_retrieval_only: false
+# Example values for each parameter are shown above. See app.py for allowed values.

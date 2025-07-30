@@ -9,9 +9,10 @@ def calculate_model_rankings(model_names, all_metrics):
         
         # Quality score (40% weight)
         quality_score = (
-            metrics.get('precision', 0.0) * 0.3 +
-            metrics.get('recall', 0.0) * 0.3 +
-            metrics.get('f1', 0.0) * 0.4
+            metrics.get('precision', 0.0) * 0.25 +
+            metrics.get('recall', 0.0) * 0.25 +
+            metrics.get('accuracy', 0.0) * 0.25 +
+            metrics.get('f1', 0.0) * 0.25
         ) * 40
         
         # Performance score (30% weight)
