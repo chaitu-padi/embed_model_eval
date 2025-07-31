@@ -376,7 +376,8 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         # Evaluation metrics
         'precision': eval_metrics.get('precision', 0.0),
         'recall': eval_metrics.get('recall', 0.0),
-        'f1_score': eval_metrics.get('f1', 0.0)
+        'accuracy': eval_metrics.get('accuracy', 0.0),  # Added accuracy
+        'f1': eval_metrics.get('f1', 0.0)  # Changed key from f1_score to f1
     }
     return metrics
 

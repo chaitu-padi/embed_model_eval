@@ -15,12 +15,12 @@ def get_supported_models():
         "sentence-transformers_all-mpnet-base-v2": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('all-mpnet-base-v2'),
         "sentence-transformers_all_miniLM-L6-v2": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('all-MiniLM-L6-v2'),
         "sentence-transformers_paraphrase-distilroberta-base-v1": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('paraphrase-distilroberta-base-v1'),
-        # Custom/other models (add actual loader logic as needed)
-        "vprelovac_universe-sentence-encoder_4": lambda: NotImplementedError("Add loader for vprelovac_universe-sentence-encoder_4"),
-        "jinaai_jina-embeddings-v2-base-en": lambda: NotImplementedError("Add loader for jinaai_jina-embeddings-v2-base-en"),
+        # Custom/other models with HuggingFace/SentenceTransformers compatibility
+        "vprelovac_universe-sentence-encoder_4": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('vprelovac/universal-sentence-encoder-4'),
+        "jinaai_jina-embeddings-v2-base-en": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('jinaai/jina-embeddings-v2-base-en'),
         "intfloat_e5-base-v2": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('intfloat/e5-base-v2'),
         "intfloat_e5-base": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('intfloat/e5-base'),
-        "nomic-ai_nomic-embed-text-v1.5": lambda: NotImplementedError("Add loader for nomic-ai_nomic-embed-text-v1.5"),
+        "nomic-ai_nomic-embed-text-v1.5": lambda: __import__('sentence_transformers').sentence_transformers.SentenceTransformer('nomic-ai/nomic-embed-text-v1.5'),
         "Cohere_cohere-embed-english-v3.0": lambda: NotImplementedError("Add loader for Cohere_cohere-embed-english-v3.0"),
         "Cohere_cohere-embed-english-light-v3.0": lambda: NotImplementedError("Add loader for Cohere_cohere-embed-english-light-v3.0"),
         #"Cohere_cohere-embed-multilingual-v3.0": lambda: NotImplementedError("Add loader for Cohere_cohere-embed-multilingual-v3.0"),

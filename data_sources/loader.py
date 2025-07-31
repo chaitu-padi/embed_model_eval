@@ -6,6 +6,11 @@ from typing import List, Dict, Tuple, Any
 from chunking import create_chunker
 import logging
 
+# Suppress pdfminer/pdfplumber warnings
+import logging as py_logging
+for noisy_logger in ["pdfminer", "pdfminer.pdfinterp", "pdfplumber", "pdfinterp"]:
+    py_logging.getLogger(noisy_logger).setLevel(py_logging.ERROR)
+
 
 def process_pdf(file_path: str, chunk_size: int = 1000) -> List[Dict]:
     """
@@ -89,14 +94,23 @@ def prepare_texts_for_embedding(df: pd.DataFrame, embed_columns: List[str], conf
     return texts, payloads
 
 def load_data(config):
-    """Load data and return DataFrame, collection name, texts and payloads"""
+    """Load data and return DataFrame, collection name, texts, payloads"""
     ds = config['data_source']
     
     # Use the collection name from vector_db config instead of file path
     collection_name = config['vector_db'].get('collection', 'flight_embeddings')
     
-    def get_file_paths(file_pattern: str) -> List[str]:
-        """Get list of files matching the pattern"""
+    # Initialize dataset statistics
+    dataset_stats = {
+        'total_size_bytes': 0,
+        'num_files': 0,
+        'num_chunks': 0,
+        'avg_chunk_size': 0,
+        'file_paths': []  # Store file paths for dataset size calculation
+    }
+    
+    def get_file_paths(file_pattern: str) -> Tuple[List[str], int]:
+        """Get list of files matching the pattern and total size in bytes"""
         import glob
         if not os.path.isabs(file_pattern):
             # Make path absolute if it's relative
@@ -104,8 +118,27 @@ def load_data(config):
         files = glob.glob(file_pattern)
         if not files:
             raise ValueError(f"No files found matching pattern: {file_pattern}")
-        logging.info(f"Found {len(files)} files matching pattern: {file_pattern}")
-        return files
+            
+        # Calculate total size
+        total_size = sum(os.path.getsize(f) for f in files)
+        
+        # Store file paths for later use
+        dataset_stats['file_paths'].extend(files)
+        dataset_stats['total_size_bytes'] = total_size
+        
+        # Log detailed dataset information
+        logging.info("Dataset Statistics:")
+        logging.info(f"Number of files: {len(files)}")
+        logging.info(f"Total dataset size: {total_size / (1024*1024):.2f} MB")
+        logging.info(f"Average file size: {(total_size / len(files)) / (1024*1024):.2f} MB")
+        
+        # Get process memory usage
+        import psutil
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        logging.info(f"Current memory usage: {memory_info.rss / (1024*1024):.2f} MB")
+        
+        return files, total_size
     
     if ds['type'] == 'csv':
         file_path = ds['file']
@@ -144,10 +177,15 @@ def load_data(config):
         collection_name = ds['file'].split('.')[0]
     elif ds['type'] == 'pdf':
         file_pattern = ds['file']
-        files = get_file_paths(file_pattern)
+        files, total_size = get_file_paths(file_pattern)
+        
+        # Update dataset statistics
+        dataset_stats['total_size_bytes'] = total_size
+        dataset_stats['num_files'] = len(files)
         
         # Process all PDF files
         all_documents = []
+        total_content_size = 0
         chunk_size = config.get('chunking', {}).get('chunk_size', 1000)
         
         for file_path in files:
@@ -155,6 +193,7 @@ def load_data(config):
                 logging.info(f"Processing PDF file: {os.path.basename(file_path)}")
                 documents = process_pdf(file_path, chunk_size)
                 all_documents.extend(documents)
+                total_content_size += sum(len(doc['content']) for doc in documents)
                 logging.info(f"Extracted {len(documents)} chunks from {os.path.basename(file_path)}")
             except Exception as e:
                 logging.error(f"Error processing {os.path.basename(file_path)}: {str(e)}")
@@ -163,14 +202,27 @@ def load_data(config):
         if not all_documents:
             raise ValueError("No valid documents were processed from any of the PDF files")
         
-        logging.info(f"Total chunks extracted from all PDFs: {len(all_documents)}")
+        # Update dataset statistics
+        dataset_stats['num_chunks'] = len(all_documents)
+        dataset_stats['avg_chunk_size'] = total_content_size / len(all_documents) if all_documents else 0
+        dataset_stats['total_content_size'] = total_content_size
+        
+        logging.info(f"Dataset Statistics:")
+        logging.info(f"Total file size: {total_size / (1024*1024):.2f} MB")
+        logging.info(f"Number of files: {len(files)}")
+        logging.info(f"Number of chunks: {len(all_documents)}")
+        logging.info(f"Average chunk size: {dataset_stats['avg_chunk_size']:.2f} characters")
+        logging.info(f"Total extracted content size: {total_content_size / (1024*1024):.2f} MB")
         
         # Convert all documents to DataFrame
         df = pd.DataFrame(all_documents)
         
         # Prepare texts and payloads
         texts = df['content'].tolist()
-        payloads = df.to_dict('records')
+        payloads = [
+            {**doc, 'dataset_stats': dataset_stats}
+            for doc in df.to_dict('records')
+        ]
         
         # Use filename without extension as collection name if not specified
         if not collection_name:

@@ -7,6 +7,7 @@ sentence-transformers
 scikit-learn
 pymilvus
 openai
+psutil
 # For other RDBMS support
 pymysql
 pyodbc

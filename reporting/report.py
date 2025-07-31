@@ -144,7 +144,15 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'
     data_path = ds.get('file', ds.get('table', ''))
-    data_size = os.path.getsize(data_path) if os.path.exists(data_path) else 'N/A'
+    
+    # Calculate total dataset size
+    if isinstance(data_path, str) and '*' in data_path:  # Handle wildcards
+        import glob
+        matching_files = glob.glob(data_path)
+        data_size = sum(os.path.getsize(f) for f in matching_files if os.path.exists(f))
+    else:
+        data_size = os.path.getsize(data_path) if os.path.exists(data_path) else 'N/A'
+    
     now = datetime.datetime.now()
     date_str = now.strftime('%Y-%m-%d_%H-%M-%S')
     
@@ -331,12 +339,16 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
             <td class="metric-value">{data_size if isinstance(data_size, str) else f"{data_size / (1024*1024):.2f} MB"}</td>
         </tr>
         <tr>
+            <td>Number of Files</td>
+            <td class="metric-value">{len(glob.glob(data_path)) if isinstance(data_path, str) and '*' in data_path else '1'}</td>
+        </tr>
+        <tr>
             <td>Source Type</td>
             <td class="metric-value">{ds.get('type', 'N/A')}</td>
         </tr>
         <tr>
             <td>Total Records</td>
-            <td class="metric-value">{ds.get('num_records', 'N/A')}</td>
+            <td class="metric-value">{all_metrics[model_names[0]].get('total_records', all_metrics[model_names[0]].get('num_vectors', ds.get('num_records', 'N/A')))}</td>
         </tr>
         <tr>
             <td>Chunk Strategy</td>
@@ -515,7 +527,7 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>Total Embeddings</td>
-            {' '.join([f'<td class="metric-value">{len(all_metrics[model].get("embeddings", []))}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{all_metrics[model].get("total_embeddings", all_metrics[model].get("num_vectors", 0))}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>GPU Memory Used</td>
@@ -549,7 +561,7 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>Accuracy</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("accuracy", 0.0):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{float(all_metrics[model].get("accuracy", 0.0)):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Recall@{top_k}</td>
@@ -561,7 +573,7 @@ def print_report(model_names, ds, db_type, host, port, collection, all_metrics, 
         </tr>
         <tr>
             <td>F1 Score</td>
-            {' '.join([f'<td class="metric-value">{all_metrics[model].get("f1", 0.0):.3f}</td>' for model in model_names])}
+            {' '.join([f'<td class="metric-value">{float(all_metrics[model].get("f1", 0.0)):.3f}</td>' for model in model_names])}
         </tr>
         <tr>
             <td>Mean Reciprocal Rank</td>
