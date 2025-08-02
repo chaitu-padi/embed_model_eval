@@ -1,5 +1,6 @@
 # Retrieval for Milvus and Qdrant
 import time
+import numpy as np
 from qdrant_client.http import models as qdrant_models
 import logging
 

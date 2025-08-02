@@ -1,15 +1,32 @@
-# Embedding Model Evaluation Configuration Guide
+# Configuration Guide for Embedding Model Evaluation
 
-This document provides a detailed guide to configuring your embedding model evaluation using the `config.yaml` file.
+## Overview
 
-## Configuration Structure
+This guide provides detailed configuration options and best practices for the embedding model evaluation framework.
 
-The configuration file is divided into several main sections:
+## 📋 Configuration Structure
+
+The configuration file (`config.yaml`) is organized into the following sections:
+
 1. Data Source Configuration
-2. Embedding Parameters
-3. Chunking Parameters
-4. Vector Database Configuration
-5. Retrieval Configuration
+2. Embedding Parameters (Including Model Selection)
+3. Vector Database Settings
+4. Retrieval Configuration
+5. Evaluation Metrics
+
+## 🔧 Key Components
+
+### Model Support
+- Bi-encoder models (SentenceTransformers)
+- Cross-encoder models
+- Automatic model type detection
+- Dimension validation and reduction
+
+### Search Capabilities
+- Semantic search with bi-encoders
+- Cross-encoder reranking
+- Configurable payload filtering
+- Multiple similarity metrics
 
 ## 1. Data Source Configuration
 

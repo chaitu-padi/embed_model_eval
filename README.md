@@ -1,6 +1,33 @@
-# Embedding Model Evaluation [IN PROGRESS]
+# Embedding Model Evaluation
 
-A comprehensive framework for evaluating and comparing embedding models, featuring parallel processing, multiple chunking strategies, and vector database integration (Qdrant/Milvus). The framework supports side-by-side model comparison with detailed performance metrics and visualization.
+A comprehensive framework for evaluating and comparing embedding models, featuring parallel processing, multiple chunking strategies, and vector database integration. The framework supports side-by-side model comparison with detailed performance metrics and visualization.
+
+## 🎯 Key Features
+
+- **📊 Multi-Model Support**:
+  - Bi-encoder models (SentenceTransformers)
+  - Cross-encoder models
+  - Automatic model type detection and handling
+  - Dimension validation and PCA reduction
+  - Configurable batch processing
+
+- **🔍 Advanced Search**:
+  - Semantic search with bi-encoder models
+  - Cross-encoder reranking support
+  - Configurable payload filtering
+  - Multiple similarity metrics
+
+- **💾 Vector Databases**:
+  - Qdrant integration with HNSW indexing
+  - Dynamic collection naming
+  - Automated dimension handling
+  - Configurable indexing parameters
+
+- **🔄 Data Processing**:
+  - Multiple data sources (CSV, PDF, Oracle)
+  - Parallel processing
+  - Configurable chunking strategies
+  - Batch size optimization
 
 ## Architecture Overview
 

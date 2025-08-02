@@ -40,10 +40,11 @@ def evaluate(retrieved_ids, relevant_ids, top_k):
     recall = true_positives / len(relevant_set) if relevant_set else 0.0
     
     # Calculate accuracy
-    # In a ranking context, accuracy can be calculated as the proportion of correct decisions
-    # Correct decisions = true positives (correctly retrieved) + true negatives (correctly not retrieved)
-    # Total decisions = retrieved_set size + relevant_set size
-    accuracy = (true_positives) / (len(retrieved_set) + len(relevant_set)) if (len(retrieved_set) + len(relevant_set)) > 0 else 0.0
+    # In information retrieval, accuracy measures the proportion of correct decisions
+    # out of all decisions made (correct and incorrect retrievals)
+    # accuracy = (TP + TN) / (TP + TN + FP + FN)
+    total_decisions = true_positives + false_positives + false_negatives
+    accuracy = 1.0 if total_decisions == 0 else true_positives / total_decisions
     
     # Calculate F1 score using harmonic mean of precision and recall
     if precision + recall > 0:  # Only check if denominator would be non-zero

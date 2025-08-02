@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import datetime
+import time
 import numpy as np
 from typing import Dict, Any
 
@@ -29,7 +30,9 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     dimension = emb_cfg.get('dimension', 384)
     
     # Create collection name with exact model name and dimension
-    vdb_cfg['collection'] = f"{base_collection}_{model_name}_{dimension}"
+    # Replace forward slash with underscore in model name for collection name
+    safe_model_name = model_name.replace('/', '_')
+    vdb_cfg['collection'] = f"{base_collection}_{safe_model_name}_{dimension}"
     logging.info(f"Created collection name: {vdb_cfg['collection']}")
     
 
@@ -63,13 +66,36 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
             host=vdb_cfg.get('host', 'localhost'),
             port=int(vdb_cfg.get('port', 6333))
         )
-        # Get the collection info to get total vector count
-        collection_info = db_client.get_collection(vdb_cfg['collection'])
-        total_embeddings = collection_info.points_count
-        logging.info(f"[DEBUG] Found {total_embeddings} existing embeddings in collection {vdb_cfg['collection']}")
+        
+        # Check if collection exists
+        try:
+            collections = db_client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            # Ensure consistent collection name format
+            safe_collection_name = vdb_cfg['collection'].replace('/', '_')
+            if safe_collection_name not in collection_names:
+                logging.error(f"[DEBUG] Collection {safe_collection_name} does not exist. Please run the pipeline without debug_retrieval_only first.")
+                raise ValueError(f"Collection {safe_collection_name} not found. Run pipeline without debug_retrieval_only first.")
+                
+            # Get the collection info to get total vector count
+            collection_info = db_client.get_collection(vdb_cfg['collection'])
+            total_embeddings = collection_info.points_count
+            logging.info(f"[DEBUG] Found {total_embeddings} existing embeddings in collection {vdb_cfg['collection']}")
+        except Exception as e:
+            logging.error(f"[DEBUG] Error accessing collection: {str(e)}")
+            raise
         
         emb_cfg = config['embed_config']
-        model = SentenceTransformer(emb_cfg.get('model', 'all-MiniLM-L6-v2'))
+        model_name = emb_cfg.get('model', 'all-MiniLM-L6-v2')
+        try:
+            if model_name.startswith('cross-encoder/'):
+                from sentence_transformers import CrossEncoder
+                model = CrossEncoder(model_name, cache_folder='model_cache')
+            else:
+                model = SentenceTransformer(model_name, cache_folder='model_cache')
+        except Exception as e:
+            logging.warning(f"Failed to load model directly, trying with sentence-transformers prefix: {e}")
+            model = SentenceTransformer(f"sentence-transformers/{model_name}", cache_folder='model_cache')
         embeddings = None  # Set to None instead of empty list to indicate no new embeddings
         data_load_time = 0
         embedding_time = 0
@@ -77,7 +103,6 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     else:
         # 1. Load data
         logging.info("[Step 1 start] Data Source Loading...")
-        import time
         t0 = time.time()
         df, collection_name, texts, payloads = load_data(config)
         data_load_time = time.time() - t0
@@ -184,7 +209,27 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 from embeddings.generator import generate_embeddings, get_model_dimension  # Import generator for PCA
                 emb_cfg = config['embed_config']
                 model_name = emb_cfg.get('model', 'all-MiniLM-L6-v2')
-                embed_model = SentenceTransformer(model_name)
+                
+                # Handle special model names with organization prefix
+            if model_name.startswith('cross-encoder/'):
+                from sentence_transformers import CrossEncoder
+                embed_model = CrossEncoder(model_name, cache_folder='model_cache')
+                logging.info(f"Loading CrossEncoder model: {model_name}")
+            else:
+                if model_name.startswith('sentence-transformers/'):
+                    embed_model = SentenceTransformer(
+                        model_name,
+                        trust_remote_code=True,
+                        model_kwargs={'attn_implementation': 'eager'}
+                    )
+                    logging.info(f"Loading model: {model_name}")
+                else:
+                    embed_model = SentenceTransformer(
+                        f"sentence-transformers/{model_name}",
+                        trust_remote_code=True,
+                        model_kwargs={'attn_implementation': 'eager'}
+                    )
+                    logging.info(f"Loading model with sentence-transformers prefix: sentence-transformers/{model_name}")
                 
                 # Get model's output dimension and configure PCA
                 model_output_dim = get_model_dimension(model_name)
@@ -224,81 +269,92 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                         raise ValueError(f"PCA model not found for dimension {actual_dim}")
                 
             if semantic_query:
-                logging.info(f"[Step 5] Performing semantic search: {semantic_query}")
-                # Generate query embedding with proper dimension
-                if not debug_retrieval_only:
-                    # Generate query embedding with proper dimension
-                    query_embedding = embed_model.encode(
-                        [semantic_query],
-                        normalize_embeddings=False,  # Don't normalize yet
-                        convert_to_numpy=True
-                    )
-                    
-                    logging.info(f"Initial query embedding shape: {query_embedding.shape}")
-                    
-                    # Ensure query_embedding is 2D and has right shape
-                    if len(query_embedding.shape) == 3:
-                        query_embedding = query_embedding.reshape(query_embedding.shape[0], -1)
-                    elif len(query_embedding.shape) == 1:
-                        query_embedding = query_embedding.reshape(1, -1)
-                    
-                    logging.info(f"Query embedding shape: {query_embedding.shape}")
-                    
-                    # Only apply PCA if needed (dimensions don't match and PCA is enabled)
-                    if use_pca and pca is not None:
-                        if query_embedding.shape[-1] != pca.n_features_in_:
-                            logging.error(f"Model output dimension ({query_embedding.shape[-1]}) doesn't match "
-                                      f"PCA input dimension ({pca.n_features_in_})")
-                            raise ValueError("Model output dimension doesn't match PCA input dimension. "
-                                          "Make sure you're using the same model that was used for training.")
-                            
-                        # Transform the query embedding using PCA
-                        query_embedding = pca.transform(query_embedding)
-                        # Take first embedding since we only have one query
-                        query_embedding = query_embedding[0]
-                        logging.info(f"Query embedding shape after PCA: {query_embedding.shape}")
-                    else:
-                        # If not using PCA, just take the first embedding
-                        query_embedding = query_embedding[0]
-                    
-                    # Apply normalization after all dimension adjustments
-                    if emb_cfg.get('normalize', True):
-                        query_embedding = query_embedding / np.linalg.norm(query_embedding)
-                    
-                    results, query_metrics = retrieve_qdrant_with_results(
-                        db_client,
-                        collection_name,
-                        semantic_query,
-                        embed_model,
-                        top_k,
-                        config=config,
-                        payload_filter_cfg=payload_filter_cfg,
-                        query_embedding=query_embedding
-                    )
+                if model_name.startswith('cross-encoder/'):
+                    logging.error("[Step 5] Semantic search is not supported for CrossEncoder models. Skipping retrieval.")
                 else:
-                    results, query_metrics = retrieve_qdrant_with_results(
-                        db_client,
-                        collection_name,
-                        semantic_query,
-                        embed_model,
-                        top_k,
-                        config=config,
-                        payload_filter_cfg=payload_filter_cfg
-                    )
-                
-                # Update metrics with query performance data
-                metrics.update({
-                    'avg_query_time': query_metrics['avg_query_time'],
-                    'query_throughput': query_metrics['query_throughput'],
-                    'total_query_time': query_metrics['total_query_time']
-                })
-                
-                for idx, (rid, payload) in enumerate(results):
-                    payload_str = ', '.join([f"{i}:{k}={v}" for i, (k, v) in enumerate(payload.items())]) if payload else 'None'
-                    logging.info(f"[Step 5][Result {idx}] ID: {rid}, Payload: {payload_str}")
-                    retrieved_ids.append(rid)
-                retrieval_time = time.time() - t3  # Calculate total retrieval time
-                logging.info(f"[Step 5] Retrieval time: {retrieval_time:.2f} seconds")
+                    logging.info(f"[Step 5] Performing semantic search: {semantic_query}")
+                    # Generate query embedding with proper dimension
+                    if not debug_retrieval_only:
+                        query_embedding = embed_model.encode(
+                            [semantic_query],
+                            normalize_embeddings=False,
+                            convert_to_numpy=True
+                        )
+                        logging.info(f"Initial query embedding shape: {query_embedding.shape}")
+                        if len(query_embedding.shape) == 3:
+                            query_embedding = query_embedding.reshape(query_embedding.shape[0], -1)
+                        elif len(query_embedding.shape) == 1:
+                            query_embedding = query_embedding.reshape(1, -1)
+                        logging.info(f"Query embedding shape: {query_embedding.shape}")
+                        if use_pca and pca is not None:
+                            if query_embedding.shape[-1] != pca.n_features_in_:
+                                logging.error(f"Model output dimension ({query_embedding.shape[-1]}) doesn't match "
+                                          f"PCA input dimension ({pca.n_features_in_})")
+                                raise ValueError("Model output dimension doesn't match PCA input dimension. "
+                                              "Make sure you're using the same model that was used for training.")
+                            query_embedding = pca.transform(query_embedding)
+                            query_embedding = query_embedding[0]
+                            logging.info(f"Query embedding shape after PCA: {query_embedding.shape}")
+                        else:
+                            query_embedding = query_embedding[0]
+                        if emb_cfg.get('normalize', True):
+                            query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                        results, query_metrics = retrieve_qdrant_with_results(
+                            db_client,
+                            collection_name,
+                            semantic_query,
+                            embed_model,
+                            top_k,
+                            config=config,
+                            payload_filter_cfg=payload_filter_cfg,
+                            query_embedding=query_embedding
+                        )
+                    else:
+                        query_embedding = embed_model.encode(
+                            [semantic_query],
+                            normalize_embeddings=False,
+                            convert_to_numpy=True
+                        )
+                        if len(query_embedding.shape) == 3:
+                            query_embedding = query_embedding.reshape(query_embedding.shape[0], -1)
+                        elif len(query_embedding.shape) == 1:
+                            query_embedding = query_embedding.reshape(1, -1)
+                        collection_info = db_client.get_collection(collection_name)
+                        actual_dim = collection_info.config.params.vectors.size
+                        if query_embedding.shape[1] != actual_dim:
+                            logging.info(f"Query dimension ({query_embedding.shape[1]}) differs from collection ({actual_dim}). Loading PCA model...")
+                            from embeddings.generator import load_pca_model
+                            pca = load_pca_model(actual_dim, emb_cfg.get('pca_config', {}))
+                            if pca is not None:
+                                query_embedding = pca.transform(query_embedding)
+                                query_embedding = query_embedding[0]
+                            else:
+                                raise ValueError(f"PCA model not found for dimension {actual_dim}")
+                        else:
+                            query_embedding = query_embedding[0]
+                        if emb_cfg.get('normalize', True):
+                            query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                        results, query_metrics = retrieve_qdrant_with_results(
+                            db_client,
+                            collection_name,
+                            semantic_query,
+                            embed_model,
+                            top_k,
+                            config=config,
+                            payload_filter_cfg=payload_filter_cfg,
+                            query_embedding=query_embedding
+                        )
+                    metrics.update({
+                        'avg_query_time': query_metrics['avg_query_time'],
+                        'query_throughput': query_metrics['query_throughput'],
+                        'total_query_time': query_metrics['total_query_time']
+                    })
+                    for idx, (rid, payload) in enumerate(results):
+                        payload_str = ', '.join([f"{i}:{k}={v}" for i, (k, v) in enumerate(payload.items())]) if payload else 'None'
+                        logging.info(f"[Step 5][Result {idx}] ID: {rid}, Payload: {payload_str}")
+                        retrieved_ids.append(rid)
+                    retrieval_time = time.time() - t3
+                    logging.info(f"[Step 5] Retrieval time: {retrieval_time:.2f} seconds")
             else:
                 logging.info("[Step 5] No semantic query provided. Skipping retrieval.")
         except Exception as e:

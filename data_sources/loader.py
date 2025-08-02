@@ -24,25 +24,78 @@ def process_pdf(file_path: str, chunk_size: int = 1000) -> List[Dict]:
         List of dictionaries with text content and metadata
     """
     documents = []
+    logging.info(f"Processing PDF file: {file_path}")
+
+    # First try with pdfplumber
     try:
         with pdfplumber.open(file_path) as pdf:
+            logging.info(f"Successfully opened PDF with {len(pdf.pages)} pages")
             for page_num, page in enumerate(pdf.pages, 1):
-                text = page.extract_text()
-                if text:
-                    # Split text into chunks if it exceeds chunk_size
-                    text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-                    for chunk_num, chunk in enumerate(text_chunks, 1):
-                        doc = {
-                            'content': chunk.strip(),
-                            'page_number': page_num,
-                            'chunk_number': chunk_num,
-                            'total_chunks': len(text_chunks),
-                            'filename': os.path.basename(file_path)
-                        }
-                        documents.append(doc)
+                try:
+                    logging.info(f"Processing page {page_num}")
+                    text = page.extract_text()
+                    if text:
+                        # Split text into chunks if it exceeds chunk_size
+                        text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+                        for chunk_num, chunk in enumerate(text_chunks, 1):
+                            doc = {
+                                'content': chunk.strip(),
+                                'page_number': page_num,
+                                'chunk_number': chunk_num,
+                                'total_chunks': len(text_chunks),
+                                'filename': os.path.basename(file_path)
+                            }
+                            documents.append(doc)
+                except Exception as page_error:
+                    logging.warning(f"Error processing page {page_num}: {str(page_error)}. Trying alternative method...")
+                    # Try alternative method for this page using PyPDF2
+                    try:
+                        import PyPDF2
+                        with open(file_path, 'rb') as file:
+                            pdf_reader = PyPDF2.PdfReader(file)
+                            if 0 <= page_num - 1 < len(pdf_reader.pages):
+                                text = pdf_reader.pages[page_num - 1].extract_text()
+                                if text:
+                                    text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+                                    for chunk_num, chunk in enumerate(text_chunks, 1):
+                                        doc = {
+                                            'content': chunk.strip(),
+                                            'page_number': page_num,
+                                            'chunk_number': chunk_num,
+                                            'total_chunks': len(text_chunks),
+                                            'filename': os.path.basename(file_path)
+                                        }
+                                        documents.append(doc)
+                    except Exception as pypdf_error:
+                        logging.error(f"Both PDF processing methods failed for page {page_num}: {str(pypdf_error)}")
+
     except Exception as e:
-        raise ValueError(f"Error processing PDF file {file_path}: {str(e)}")
-    
+        logging.error(f"Error with primary PDF processing method: {str(e)}")
+        # Try alternative method using PyPDF2
+        try:
+            import PyPDF2
+            with open(file_path, 'rb') as file:
+                logging.info("Trying alternative PDF processing method with PyPDF2")
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page_num, page in enumerate(pdf_reader.pages, 1):
+                    text = page.extract_text()
+                    if text:
+                        text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+                        for chunk_num, chunk in enumerate(text_chunks, 1):
+                            doc = {
+                                'content': chunk.strip(),
+                                'page_number': page_num,
+                                'chunk_number': chunk_num,
+                                'total_chunks': len(text_chunks),
+                                'filename': os.path.basename(file_path)
+                            }
+                            documents.append(doc)
+        except Exception as final_error:
+            raise ValueError(f"All PDF processing methods failed for {file_path}. Original error: {str(e)}, Final error: {str(final_error)}")
+
+    if not documents:
+        logging.warning(f"No text content extracted from {file_path}")
+        
     return documents
 
 def prepare_texts_for_embedding(df: pd.DataFrame, embed_columns: List[str], config: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, Any]]]:

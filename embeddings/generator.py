@@ -1,11 +1,14 @@
 import torch
 import numpy as np
 import logging
-from sentence_transformers import SentenceTransformer
-from typing import List, Any, Dict, Optional
+from typing import List, Any, Dict, Optional, Tuple
 from sklearn.decomposition import PCA
 import os
 import joblib
+import sys
+
+# Add the project root to Python path to allow importing from embedding_models
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Global variable to store PCA model
 _pca_model = None
@@ -23,11 +26,24 @@ def load_pca_model(target_dim: int, pca_config: Optional[Dict] = None) -> Option
     return None
 
 def get_model_dimension(model_name: str) -> int:
-    """Get the output dimension of a SentenceTransformer model."""
-    temp_model = SentenceTransformer(model_name)
-    # Use a dummy input to get the output dimension
-    dummy_embedding = temp_model.encode(["dummy text"], convert_to_numpy=True)
-    return dummy_embedding.shape[1]
+    """Get the output dimension of the embedding model."""
+    from embedding_models.embedder import load_embedding_model
+    from sentence_transformers import SentenceTransformer, CrossEncoder
+    
+    # Load the model using our custom loader that handles different model types
+    model, _ = load_embedding_model(model_name)
+    
+    # Handle different model types
+    if isinstance(model, CrossEncoder):
+        # For cross-encoders, use their base model's config
+        hidden_size = model.model.config.hidden_size
+        return hidden_size
+    else:
+        # For sentence transformers and other models that support encode
+        dummy_embedding = model.encode(["dummy text"])
+        if isinstance(dummy_embedding, torch.Tensor):
+            dummy_embedding = dummy_embedding.cpu().numpy()
+        return dummy_embedding.shape[1]
 
 def generate_embeddings(
     texts: List[str],
@@ -39,7 +55,7 @@ def generate_embeddings(
     pca_config: Optional[Dict]
 ) -> Any:
     """
-    Generate embeddings for a list of texts using SentenceTransformer.
+    Generate embeddings for a list of texts using the specified model.
     
     Args:
         texts: List of input texts

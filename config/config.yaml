@@ -3,7 +3,7 @@
 # 1. Data Source Configuration
 data_source:
   type: pdf                                      # str: 'csv', 'oracle', 'json', 'txt', 'pdf'
-  file: 'data/pdf_files/jesc*.pdf'                      # Path to the PDF file
+  file: 'data/pdf_files/jesc1*.pdf'                      # Path to the PDF file
   # PDF-specific settings
   pdf_config:
     extract_tables: true                        # Whether to extract tables from PDF
@@ -19,11 +19,16 @@ data_source:
   # user: myuser
   # password: mypass
   # table: mytable
-
+#"vprelovac_universe-sentence-encoder_4", 
 # 2. Embedding Parameters
 embed_config:
-  models: ["all-MiniLM-L6-v2", "paraphrase-distilroberta-base-v1"] #, "all-mpnet-base-v2" ] # List of models to evaluate 
-  default_model: "all-MiniLM-L6-v2"                  # Default model for single-model operations
+  models: [ 
+    #"cross-encoder/ms-marco-MiniLM-L-6-v2",
+    #"text-embedding-ada-002",
+    "sentence-transformers/all-MiniLM-L6-v2",
+    "sentence-transformers/all-mpnet-base-v2"
+  ] # List of models to evaluate 
+  default_model: "sentence-transformers/all-MiniLM-L6-v2"   # Default model for single-model operations
   batch_size: 256                                    # Increased batch size
   normalize: true
   optimization:

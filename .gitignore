@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
+/model_cache/
 # Virtual environments
 .venv/
 venv/
