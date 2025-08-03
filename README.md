@@ -1,6 +1,21 @@
 # Embedding Model Evaluation
 
-A comprehensive framework for evaluating and comparing embedding models, featuring parallel processing, multiple chunking strategies, and vector database integration. The framework supports side-by-side model comparison with detailed performance metrics and visualization.
+A comprehensive framework for evaluating and com### Pipeline Components
+- **Configuration**: YAML-based system configuration
+- **Data Loading**: Source data import and preprocessing
+- **Embedding Generation**: Text to vector conversion
+- **Vector DB Insertion**: Database storage and indexing
+- **Retrieval**: Vector similarity search
+- **Evaluation**: Performance metric calculation
+- **Report Generation**: Comprehensive performance analysis and visualization
+  - Model ranking with weighted scoring (40/30/30 split)
+  - Quality metrics (precision, recall, accuracy, F1)
+  - Performance metrics (speed, memory usage)
+  - Resource utilization tracking
+  - Detailed HTML reports with comparative analysis
+  - For details, see [Report Generation Guide](docs/reporting_guide.md)
+
+#### 2. Data Flow Componentsedding models, featuring parallel processing, multiple chunking strategies, and vector database integration. The framework supports side-by-side model comparison with detailed performance metrics and visualization.
 
 ## 🎯 Key Features
 
@@ -251,9 +266,29 @@ graph LR
 - Configurable top-k results
 
 ### Report Generation
-- Interactive HTML reports with model name and dimensions
-- Performance metrics
-- Timing and resource usage statistics
+- Interactive HTML reports with comprehensive model analysis
+- Weighted scoring system for model ranking:
+  ```python
+  # Quality Score (40%)
+  quality_score = (precision * 0.25 + recall * 0.25 + 
+                  accuracy * 0.25 + f1_score * 0.25) * 40
+                  
+  # Performance Score (30%)
+  performance_score = min(embeddings_per_second / 100, 1.0) * 30
+  
+  # Efficiency Score (30%)
+  efficiency_score = (1.0 / (total_time + 1)) * 30
+  ```
+- Strength analysis categories:
+  - Semantic Accuracy (Excellent: F1 > 0.7, Good: F1 > 0.6)
+  - Processing Speed (High: >100/s, Efficient: >50/s)
+  - Resource Usage (Efficient: <2GB GPU, Moderate: 2-4GB)
+  - Retrieval Speed (Exceptional: <0.5s, Fast: <1.0s)
+- Customizable reporting options:
+  - Configurable metric weights
+  - Adjustable thresholds
+  - Resource tracking preferences
+- For complete details, see [Report Generation Guide](docs/reporting_guide.md)
 
 ## Dependencies
 
@@ -370,7 +405,17 @@ See `config/config.yaml` for all options:
 ## Current Status
 The framework is ready with the following features:
 - **Stable Backend CLI**: Full pipeline support for multi-model evaluation
-- **Comparative Reporting**: Side-by-side model evaluation with detailed metrics
+- **Advanced Model Evaluation**:
+  - Weighted scoring system (40% quality, 30% performance, 30% efficiency)
+  - Comprehensive strength analysis across multiple dimensions
+  - Automatic model ranking and categorization
+  - Detailed performance profiling and resource tracking
+- **Comparative Reporting**: 
+  - Side-by-side model evaluation with detailed metrics
+  - Interactive HTML reports with performance visualizations
+  - Resource utilization charts and timing analysis
+  - Customizable metric weights and thresholds
+  - See [Report Generation Guide](docs/reporting_guide.md) for details
 - **Latest Features**:
   - Multi-model evaluation and comparison
   - Enhanced HTML reporting with comparative metrics
