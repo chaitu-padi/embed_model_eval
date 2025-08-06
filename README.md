@@ -1,6 +1,6 @@
 # Embedding Model Evaluation
 
-A comprehensive framework for evaluating and com### Pipeline Components
+A comprehensive framework for evaluating embedding models
 - **Configuration**: YAML-based system configuration
 - **Data Loading**: Source data import and preprocessing
 - **Embedding Generation**: Text to vector conversion

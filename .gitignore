@@ -29,3 +29,4 @@ embedding_report.html
 # Misc
 *.log
 *.tmp
+embedding_models/model_cache/

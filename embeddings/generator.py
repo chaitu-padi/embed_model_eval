@@ -14,7 +14,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _pca_model = None
 
 def load_pca_model(target_dim: int, pca_config: Optional[Dict] = None) -> Optional[PCA]:
-    """Load the PCA model if it exists, otherwise return None."""
+    """Load the PCA model if it exists, otherwise return None.
+    
+    Args:
+        target_dim: Target dimension for PCA reduction
+        pca_config: Configuration dict from embed_config.dimension_reduction
+    """
     global _pca_model
     if _pca_model is not None and _pca_model.n_components_ == target_dim:
         return _pca_model
@@ -22,7 +27,14 @@ def load_pca_model(target_dim: int, pca_config: Optional[Dict] = None) -> Option
     # Try to load from disk
     pca_file = f'pca_model_{target_dim}d.joblib'
     if os.path.exists(pca_file):
-        return joblib.load(pca_file)
+        model = joblib.load(pca_file)
+        # Validate configuration matches
+        if pca_config:
+            if model.random_state != pca_config.get('random_state'):
+                logging.warning("Loaded PCA model has different random_state than config")
+            if model.whiten != pca_config.get('whiten', False):
+                logging.warning("Loaded PCA model has different whiten setting than config")
+        return model
     return None
 
 def get_model_dimension(model_name: str) -> int:

@@ -114,27 +114,34 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         emb_cfg = config['embed_config']
         t1 = time.time()
         
-        # Get all required parameters from config
-        if 'model' not in emb_cfg:
-            raise ValueError("model name must be specified in embed_config")
-        if 'dimension' not in emb_cfg:
-            raise ValueError("dimension must be specified in embed_config")
-        if 'batch_size' not in emb_cfg:
-            raise ValueError("batch_size must be specified in embed_config")
-        if 'normalize' not in emb_cfg:
-            raise ValueError("normalize must be specified in embed_config")
-        if 'use_pca' not in emb_cfg:
-            raise ValueError("use_pca must be specified in embed_config")
+        # Get dimension reduction settings
+        dim_reduction = emb_cfg.get('dimension_reduction', {})
+        use_pca = dim_reduction.get('use_pca', False)
+        pca_config = {
+            'random_state': dim_reduction.get('random_state', 42),
+            'whiten': dim_reduction.get('whiten', False)
+        }
+        
+        # Validate required parameters
+        required_params = {
+            'model': "model name must be specified in embed_config",
+            'dimension': "dimension must be specified in embed_config",
+            'batch_size': "batch_size must be specified in embed_config",
+            'normalize': "normalize must be specified in embed_config"
+        }
+        
+        for param, message in required_params.items():
+            if param not in emb_cfg:
+                raise ValueError(message)
             
-
         embeddings, model_metrics = generate_embeddings(
             texts=texts,
             model_name=emb_cfg['model'],
             batch_size=int(emb_cfg['batch_size']),
             normalize=emb_cfg['normalize'],
             target_dim=int(emb_cfg['dimension']),
-            use_pca=emb_cfg['use_pca'],
-            pca_config=emb_cfg.get('pca_config', {})  # pca_config is optional
+            use_pca=use_pca,
+            pca_config=pca_config
         )
         embedding_time = time.time() - t1
         logging.info(f"[Step 2 end] Generated {len(embeddings)} embeddings. Time taken: {embedding_time:.2f} seconds.")
@@ -234,7 +241,14 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 # Get model's output dimension and configure PCA
                 model_output_dim = get_model_dimension(model_name)
                 target_dim = emb_cfg.get('dimension', 384)
-                use_pca = emb_cfg.get('use_pca', False)
+                
+                # Get dimension reduction settings
+                dim_reduction = emb_cfg.get('dimension_reduction', {})
+                use_pca = dim_reduction.get('use_pca', False)
+                pca_config = {
+                    'random_state': dim_reduction.get('random_state', 42),
+                    'whiten': dim_reduction.get('whiten', False)
+                }
                 
                 # Check actual dimension from vector DB collection
                 try:
@@ -256,7 +270,6 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
                 
                 # Load PCA model if needed
                 pca = None
-                pca_config = emb_cfg.get('pca_config', {})
                 if use_pca:
                     logging.info(f"PCA config: {pca_config}")
                     from embeddings.generator import load_pca_model
@@ -386,7 +399,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
     processing_rate = (len(texts) / data_load_time if 'texts' in locals() 
                       and texts is not None and data_load_time > 0 else 0)
         
-    # Initialize metrics with all values
+        # Initialize metrics with all values
     metrics = {
         # Timing metrics
         'data_load_time': data_load_time,
@@ -414,9 +427,7 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
         'embedding_batch_size': emb_cfg.get('batch_size', 'N/A'),
         'embedding_dimension': emb_cfg.get('dimension', 'N/A'),
         'normalize': emb_cfg.get('normalize', True),
-        'use_pca': emb_cfg.get('use_pca', False),
-        
-        # Vector DB configuration
+        'use_pca': emb_cfg.get('dimension_reduction', {}).get('use_pca', False),        # Vector DB configuration
         'db_type': vdb_cfg.get('type', 'qdrant'),
         'db_batch_size': vdb_cfg.get('batch_size', 'N/A'),
         'db_upsert_retries': vdb_cfg.get('upsert_retries', 'N/A'),
