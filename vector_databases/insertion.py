@@ -68,17 +68,38 @@ def ensure_collection_exists(
     client: QdrantClient,
     collection_name: str,
     vector_size: int,
+    timeout: int = 300,
+    check_interval: int = 1
 ) -> None:
     """
     Ensure the collection exists, create if it doesn't
+    
+    Args:
+        client: QdrantClient instance
+        collection_name: Name of the collection
+        vector_size: Size of vectors
+        timeout: Operation timeout in seconds
+        check_interval: Interval between status checks in seconds
     """
     try:
         # Sanitize collection name - remove file path elements
         collection_name = collection_name.replace('/', '_').replace('\\', '_')
         
-        # Check if collection exists
-        collections = client.get_collections().collections
-        collection_exists = any(col.name == collection_name for col in collections)
+        # Set client timeout
+        client.timeout = timeout
+        
+        # Check if collection exists with timeout handling
+        start_time = time.time()
+        while True:
+            try:
+                collections = client.get_collections().collections
+                collection_exists = any(col.name == collection_name for col in collections)
+                break
+            except Exception as e:
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"Collection check timed out after {timeout} seconds")
+                time.sleep(check_interval)
+                logging.warning(f"Collection check failed, retrying... Error: {str(e)}")
 
         if not collection_exists:
             # Create collection if it doesn't exist
@@ -91,12 +112,20 @@ def ensure_collection_exists(
             )
             logging.info(f"Created new collection: {collection_name}")
             
-            # Wait for collection to be ready
+            # Wait for collection to be ready with timeout
+            start_time = time.time()
             while True:
-                collection_info = client.get_collection(collection_name)
-                if collection_info.status == CollectionStatus.GREEN:
-                    break
-                time.sleep(1)
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(f"Collection creation timed out after {timeout} seconds")
+                    
+                try:
+                    collection_info = client.get_collection(collection_name)
+                    if collection_info.status == CollectionStatus.GREEN:
+                        break
+                except Exception as e:
+                    logging.warning(f"Collection status check failed: {str(e)}")
+                    
+                time.sleep(check_interval)
                 logging.info("Waiting for collection to be ready...")
             
             logging.info(f"Collection {collection_name} is ready")

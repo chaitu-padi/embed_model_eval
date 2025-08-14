@@ -161,20 +161,45 @@ def run_pipeline(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
             if use_pca:
                 logging.info("This is due to PCA auto-adjustment based on data characteristics")
 
-        # 3. Insert into vector database (insert_embeddings_qdrant will ensure collection exists with correct dimension)
+        # 3. Insert into vector database with retry logic
         from vector_databases.insertion import insert_embeddings_qdrant, setup_qdrant_indexing
         logging.info("[Step 3 start] Vector Database Insertion...")
         t2 = time.time()
-        db_client, db_metrics = insert_embeddings_qdrant(
-            embeddings,
-            texts,
-            payloads,
-            collection_name=vdb_cfg.get('collection', 'embeddings'),
-            vector_size=actual_vector_size,
-            host=vdb_cfg.get('host', 'localhost'),
-            port=int(vdb_cfg.get('port', 6333)),
-            batch_size=int(vdb_cfg.get('batch_size', 100))
-        )
+        
+        max_retries = vdb_cfg.get('connection_retries', 3)
+        retry_delay = vdb_cfg.get('retry_delay', 5)
+        success = False
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    logging.info(f"Retry attempt {attempt + 1}/{max_retries} after {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    
+                db_client, db_metrics = insert_embeddings_qdrant(
+                    embeddings,
+                    texts,
+                    payloads,
+                    collection_name=vdb_cfg.get('collection', 'embeddings'),
+                    vector_size=actual_vector_size,
+                    host=vdb_cfg.get('host', 'localhost'),
+                    port=int(vdb_cfg.get('port', 6333)),
+                    batch_size=int(vdb_cfg.get('batch_size', 100))
+                )
+                success = True
+                break
+            except Exception as e:
+                last_error = e
+                logging.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                if "timed out" in str(e).lower():
+                    logging.warning("Connection timed out. Consider increasing timeout value in config.")
+                elif "connection refused" in str(e).lower():
+                    logging.warning("Connection refused. Make sure Qdrant server is running.")
+                    
+        if not success:
+            raise RuntimeError(f"Failed to insert embeddings after {max_retries} attempts. Last error: {str(last_error)}")
+            
         insertion_time = db_metrics['insertion_time']
         logging.info(f"[Step 3 end] Inserted embeddings into vector DB. Time taken: {insertion_time:.2f} seconds. Insert rate: {db_metrics['insert_rate']:.2f} vectors/second.")
 

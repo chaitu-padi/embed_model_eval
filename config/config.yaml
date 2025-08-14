@@ -74,12 +74,19 @@ chunking:
 # 4. Vector Database Connection Details
 vector_db:
   type: qdrant                    # str: 'Milvus', 'Qdrant'
-  host: localhost                 # str
-  port: 6333                      # int (Milvus default) or 6333 (Qdrant default)
-  collection: science_embeddings #flight_embeddings     # str
-  batch_size: 300                 # int: batch size for DB insertion (default: 500)
-  upsert_retries: 3               # int: number of retries for Qdrant upsert (default: 3)
-  upsert_retry_delay: 2           # int: delay (seconds) between retries (default: 2)
+  host: localhost                 # str: Database host address
+  port: 6333                      # int: Database port (Qdrant default: 6333, Milvus default: 19530)
+  collection: science_embeddings  # str: Collection name prefix
+  
+  # Connection settings
+  connection_retries: 3          # int: Number of connection retry attempts
+  retry_delay: 5                 # int: Seconds to wait between retries
+  timeout: 300                   # int: Operation timeout in seconds
+  
+  # Batch processing
+  batch_size: 300               # int: Batch size for DB insertion (default: 500)
+  upsert_retries: 3            # int: Number of retries for failed upserts
+  upsert_retry_delay: 2        # int: Delay (seconds) between upsert retries
   # Indexing configuration for Qdrant
 
   vector_index:
